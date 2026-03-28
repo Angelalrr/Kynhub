@@ -1319,7 +1319,7 @@ local function _loadAutoStealHub()
         local numStr = str:match("[%d%.]+")
         if not numStr then return 0 end
         local num = tonumber(numStr) or 0
-        if str:find("K") then num*=1e3 elseif str:find("M") then num*=1e6 elseif str:find("B") then num*=1e9 elseif str:find("T") then num*=1e12 end
+        if str:find("K") then num = num * 1e3 elseif str:find("M") then num = num * 1e6 elseif str:find("B") then num = num * 1e9 elseif str:find("T") then num = num * 1e12 end
         return num
     end
 
@@ -1528,7 +1528,7 @@ local function _loadAutoStealHub()
             asfLockPos = Vector3.new(pos.X, hrp.Position.Y, pos.Z)
             local flatDist = Vector3.new(hrp.Position.X - pos.X, 0, hrp.Position.Z - pos.Z).Magnitude
             if flatDist < 3.5 then break end
-            task.wait(0.05); elapsed += 0.05
+            task.wait(0.05); elapsed = elapsed + 0.05
         end
         return true
     end
@@ -1561,7 +1561,7 @@ local function _loadAutoStealHub()
                 if not isTargetStillValid(target.uid) then SetStealFloor(false); asfLockPos = nil; return false end
                 local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if currentHrp and currentHrp.Position.Y >= brainrotPos.Y - 6 then break end
-                task.wait(0.1); ft += 0.1
+                task.wait(0.1); ft = ft + 0.1
             end
             if not asfRunning then SetStealFloor(false); asfLockPos = nil; return false end
             task.wait(0.05)
@@ -1581,7 +1581,7 @@ local function _loadAutoStealHub()
             local escapeTimeout = 0
             while isMeStealing() and asfRunning do
                 task.wait(0.1)
-                escapeTimeout += 0.1
+                escapeTimeout = escapeTimeout + 0.1
                 if escapeTimeout > 3 then break end
             end
         else
