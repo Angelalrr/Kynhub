@@ -1311,21 +1311,15 @@ local function _runAutoClone()
         end
 
         pcall(function()
-            if tpButton:IsA("GuiButton") then
-                tpButton:Activate()
-                if firesignal then
-                    firesignal(tpButton.MouseButton1Down)
-                    firesignal(tpButton.MouseButton1Up)
-                    firesignal(tpButton.MouseButton1Click)
-                    firesignal(tpButton.Activated)
-                elseif getconnections then
-                    for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do
-                        if c.Function then c.Function() end
-                    end
-                    for _, c in pairs(getconnections(tpButton.MouseButton1Click)) do
-                        if c.Function then c.Function() end
-                    end
+            -- Igual al comportamiento del script original: usar MouseButton1Up del botón TP.
+            if firesignal then
+                firesignal(tpButton.MouseButton1Up)
+            elseif getconnections then
+                for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do
+                    if c.Function then c.Function() end
                 end
+            elseif tpButton:IsA("GuiButton") then
+                tpButton:Activate()
             end
         end)
     end)
