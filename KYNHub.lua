@@ -34,7 +34,7 @@ local HttpService       = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 
---// ======= PERSISTENCIA DE TOGGLES =======
+--// ======= SETTINGS PERSISTENTES =======
 local CONFIG_FILE = "KYNHub_Settings.json"
 local SETTINGS = {
     AutoDesync = false,
@@ -46,6 +46,8 @@ local SETTINGS = {
     AntiRagdoll = false,
     AntiLag = false,
     FreezeAnimaciones = false,
+    AntiTorret = false,
+    AntiBeeDisco = false,
 }
 
 local function saveSettings()
@@ -59,7 +61,8 @@ end
 local function loadSettings()
     pcall(function()
         if isfile and readfile and isfile(CONFIG_FILE) then
-            local decoded = HttpService:JSONDecode(readfile(CONFIG_FILE))
+            local raw = readfile(CONFIG_FILE)
+            local decoded = HttpService:JSONDecode(raw)
             if type(decoded) == "table" then
                 for k, v in pairs(decoded) do
                     if SETTINGS[k] ~= nil and type(v) == "boolean" then
@@ -83,8 +86,6 @@ loadSettings()
 -- Limpiar GUI antigua
 local OLD = CoreGui:FindFirstChild("KYNHubGUI")
 if OLD then OLD:Destroy() end
-local OLD2 = CoreGui:FindFirstChild("KYNHubDesyncGUI")
-if OLD2 then OLD2:Destroy() end
 
 -- ScreenGui
 local gui = Instance.new("ScreenGui")
@@ -146,18 +147,18 @@ cloneDragFrame.Parent = gui
 
 local cloneQuickBtn = Instance.new("TextButton")
 cloneQuickBtn.Size = UDim2.new(1, 0, 1, 0)
-cloneQuickBtn.Text = "⚡\nCLONE"
+cloneQuickBtn.BackgroundColor3 = THEME.AccentDark
+cloneQuickBtn.TextColor3 = THEME.TextLight
 cloneQuickBtn.Font = Enum.Font.GothamBold
 cloneQuickBtn.TextSize = 10
-cloneQuickBtn.TextColor3 = THEME.TextLight
-cloneQuickBtn.BackgroundColor3 = THEME.AccentDark
+cloneQuickBtn.Text = "Auto Clone"
 cloneQuickBtn.AutoButtonColor = false
 cloneQuickBtn.Parent = cloneDragFrame
 Instance.new("UICorner", cloneQuickBtn).CornerRadius = UDim.new(1, 0)
 
-local cloneStroke = Instance.new("UIStroke", cloneQuickBtn)
-cloneStroke.Thickness = 1.5
-cloneStroke.Color = THEME.Accent
+local cloneQuickStroke = Instance.new("UIStroke", cloneQuickBtn)
+cloneQuickStroke.Color = THEME.Accent
+cloneQuickStroke.Thickness = 1.4
 
 -- ==========================================
 -- // MAIN GUI FRAME
@@ -194,7 +195,19 @@ mainGradient.Color = ColorSequence.new{
 }
 mainGradient.Parent = mainStroke
 
--- TITLE BAR
+local shadow = Instance.new("ImageLabel")
+shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+shadow.Size = UDim2.new(1, 45, 1, 45)
+shadow.ZIndex = -1
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://131292684852487"
+shadow.ImageColor3 = THEME.Accent
+shadow.ImageTransparency = 0.5
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(24, 24, 276, 276)
+shadow.Parent = mainFrame
+
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -35, 0, 35)
 title.BackgroundTransparency = 1
@@ -212,6 +225,13 @@ titleLine.BackgroundColor3 = THEME.Accent
 titleLine.BorderSizePixel = 0
 titleLine.Parent = mainFrame
 
+local titleLineGradient = Instance.new("UIGradient")
+titleLineGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, THEME.Accent),
+    ColorSequenceKeypoint.new(1, THEME.AccentDark)
+}
+titleLineGradient.Parent = titleLine
+
 -- ==========================================
 -- // BOTÓN DE CERRAR (X) Y DIÁLOGO
 -- ==========================================
@@ -225,7 +245,13 @@ closeBtn.TextSize = 16
 closeBtn.TextColor3 = THEME.TextLight
 closeBtn.Parent = mainFrame
 
--- Overlay oscuro de confirmación
+closeBtn.MouseEnter:Connect(function()
+    TweenService:Create(closeBtn, TweenInfo.new(0.2), {TextColor3 = THEME.Danger}):Play()
+end)
+closeBtn.MouseLeave:Connect(function()
+    TweenService:Create(closeBtn, TweenInfo.new(0.2), {TextColor3 = THEME.TextLight}):Play()
+end)
+
 local overlayConfirm = Instance.new("Frame")
 overlayConfirm.Size = UDim2.new(1, 0, 1, 0)
 overlayConfirm.BackgroundColor3 = Color3.new(0,0,0)
@@ -243,6 +269,11 @@ confirmBox.BackgroundColor3 = THEME.FrameBg2
 confirmBox.ZIndex = 51
 confirmBox.Parent = overlayConfirm
 Instance.new("UICorner", confirmBox).CornerRadius = UDim.new(0, 10)
+
+local confirmStroke = Instance.new("UIStroke")
+confirmStroke.Color = THEME.Danger
+confirmStroke.Thickness = 1.5
+confirmStroke.Parent = confirmBox
 
 local confirmScale = Instance.new("UIScale")
 confirmScale.Scale = 0
@@ -303,9 +334,6 @@ btnYes.MouseButton1Click:Connect(function()
     gui:Destroy()
 end)
 
--- ==========================================
--- // TAB CONTAINER & CONTENT
--- ==========================================
 local tabContainer = Instance.new("Frame")
 tabContainer.Size = UDim2.new(1, -20, 0, 30)
 tabContainer.Position = UDim2.new(0, 10, 0, 45)
@@ -326,7 +354,6 @@ contentFrame.BackgroundTransparency = 1
 contentFrame.Parent = mainFrame
 
 local tabs, tabButtons = {}, {}
-
 local function createTab(name)
     local tab = Instance.new("ScrollingFrame")
     tab.Name = name .. "Tab"
@@ -346,7 +373,6 @@ local function createTab(name)
     tabs[name] = tab
     return tab
 end
-
 createTab("Main") createTab("Visual") createTab("Misc")
 
 local function setActiveTab(name)
@@ -379,9 +405,6 @@ createTabButton("Visual", "Visual")
 createTabButton("Misc", "Misc")
 setActiveTab("Main")
 
--- ==========================================
--- // ELEMENTOS: TOGGLE
--- ==========================================
 _G.KYNAddToggle = function(tabName, data)
     local tab = tabs[tabName]
     if not tab then return end
@@ -412,28 +435,38 @@ _G.KYNAddToggle = function(tabName, data)
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
 
     local state = false
-    local function applyVisual()
-        dot.Position = state and UDim2.new(1,-14,0.5,-6) or UDim2.new(0,2,0.5,-6)
-        track.BackgroundColor3 = state and THEME.ToggleOnTrack or THEME.ToggleOffTrack
-        btn.TextColor3 = state and THEME.ToggleOnTrack or THEME.TextLight
-    end
-
-    if data.Default == true then
-        state = true
-        applyVisual()
-        if data.Callback then task.spawn(function() pcall(data.Callback, true) end) end
+    local function apply(animated)
+        if animated then
+            TweenService:Create(dot, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                {Position = state and UDim2.new(1,-14,0.5,-6) or UDim2.new(0,2,0.5,-6)}):Play()
+            TweenService:Create(track, TweenInfo.new(0.2),
+                {BackgroundColor3 = state and THEME.ToggleOnTrack or THEME.ToggleOffTrack}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.2),
+                {TextColor3 = state and THEME.ToggleOnTrack or THEME.TextLight}):Play()
+        else
+            dot.Position = state and UDim2.new(1,-14,0.5,-6) or UDim2.new(0,2,0.5,-6)
+            track.BackgroundColor3 = state and THEME.ToggleOnTrack or THEME.ToggleOffTrack
+            btn.TextColor3 = state and THEME.ToggleOnTrack or THEME.TextLight
+        end
     end
 
     btn.MouseButton1Click:Connect(function()
         state = not state
-        TweenService:Create(dot, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-            {Position = state and UDim2.new(1,-14,0.5,-6) or UDim2.new(0,2,0.5,-6)}):Play()
-        TweenService:Create(track, TweenInfo.new(0.2),
-            {BackgroundColor3 = state and THEME.ToggleOnTrack or THEME.ToggleOffTrack}):Play()
-        TweenService:Create(btn, TweenInfo.new(0.2),
-            {TextColor3 = state and THEME.ToggleOnTrack or THEME.TextLight}):Play()
+        apply(true)
         if data.Callback then pcall(data.Callback, state) end
     end)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleHover}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleBg}):Play()
+    end)
+
+    if data.Default == true then
+        state = true
+        apply(false)
+        if data.Callback then task.spawn(function() pcall(data.Callback, true) end) end
+    end
 end
 
 _G.KYNAddButton = function(tabName, data)
@@ -450,11 +483,28 @@ _G.KYNAddButton = function(tabName, data)
     btn.AutoButtonColor = false
     btn.Parent = tab
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.new(0, 30, 1, 0)
+    icon.Position = UDim2.new(1, -36, 0, 0)
+    icon.BackgroundTransparency = 1
+    icon.Text = "▶"
+    icon.TextColor3 = THEME.Accent
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 13
+    icon.Parent = btn
+
     btn.MouseButton1Click:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
         task.wait(0.15)
         TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.AccentDark}):Play()
         if data.Callback then pcall(data.Callback) end
+    end)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleHover}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.AccentDark}):Play()
     end)
 end
 
@@ -473,241 +523,17 @@ _G.KYNAddLabel = function(tabName, text)
     Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 6)
 end
 
--- ============================================================
--- // FEATURES - CÓDIGO
--- ============================================================
-local _lagEnabled = false
-local _lagConn = nil
-
-local function _lagOptimize(obj)
-    pcall(function()
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-            obj.Enabled = false
-        end
-        if obj:IsA("Decal") or obj:IsA("Texture") then obj.Transparency = 1 end
-        if obj:IsA("BasePart") then
-            obj.Material = Enum.Material.Plastic
-            obj.Reflectance = 0
-            obj.CastShadow = false
-        end
-        if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-            obj.Enabled = false
-        end
-    end)
-end
-
-local function _lagApplyAll()
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 9e9
-    Lighting.Brightness = 1
-    Lighting.EnvironmentDiffuseScale = 0
-    Lighting.EnvironmentSpecularScale = 0
-    for _, v in pairs(Lighting:GetChildren()) do
-        if v:IsA("BloomEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") then
-            v.Enabled = false
-        end
-    end
-    for _, v in pairs(Workspace:GetDescendants()) do _lagOptimize(v) end
-end
-
-local function _lagEnable()
-    if _lagEnabled then return end
-    _lagEnabled = true
-    _lagApplyAll()
-    _lagConn = Workspace.DescendantAdded:Connect(_lagOptimize)
-end
-
-local function _lagDisable()
-    _lagEnabled = false
-    if _lagConn then _lagConn:Disconnect(); _lagConn = nil end
-end
-
-local function _runAutoClone()
-    local character = LocalPlayer.Character
-    if not character then return end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return end
-    local clonerTool = LocalPlayer.Backpack:FindFirstChild("Quantum Cloner") or character:FindFirstChild("Quantum Cloner")
-    if not clonerTool then return end
-    if clonerTool.Parent ~= character then humanoid:EquipTool(clonerTool) end
-    clonerTool:Activate()
-    task.delay(0.2, function()
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        local tf = pg and pg:FindFirstChild("ToolsFrames")
-        local cloneUI = tf and tf:FindFirstChild("QuantumCloner")
-        local tpButton = cloneUI and cloneUI:FindFirstChild("TeleportToClone")
-        if not tpButton then return end
-        pcall(function()
-            if firesignal then firesignal(tpButton.MouseButton1Up) end
-        end)
-    end)
-end
-
-cloneQuickBtn.MouseButton1Click:Connect(function()
-    TweenService:Create(cloneQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
-    _runAutoClone()
-    task.wait(0.15)
-    TweenService:Create(cloneQuickBtn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.AccentDark}):Play()
+local _animSpeed = 2.5
+local _animDist  = 6
+RunService.RenderStepped:Connect(function()
+    btnGradient.Rotation  = (btnGradient.Rotation  + 2)   % 360
+    mainGradient.Rotation = (mainGradient.Rotation + 1.5) % 360
+    local wave = math.sin(tick() * _animSpeed) * _animDist
+    toggleBtn.Position = UDim2.new(0, 0, 0, wave)
+    mainFrame.Position = UDim2.new(0, 0, 0, wave)
 end)
 
--- DESYNC (misma lógica solicitada, visual mejorado y renombrado)
-local _desyncLoaded = false
-local _desyncPanel = nil
-local _desyncTargetBtn, _desyncTargetIndicator, _desyncTargetTB
-
-local function _buildDesyncPanel()
-    if _desyncPanel then pcall(function() _desyncPanel:Destroy() end) end
-
-    _desyncPanel = Instance.new("Frame")
-    _desyncPanel.Name = "KYNHubDesyncPanel"
-    _desyncPanel.Size = UDim2.new(0, 240, 0, 150)
-    _desyncPanel.Position = UDim2.new(1, -250, 0.5, -75)
-    _desyncPanel.BackgroundColor3 = THEME.FrameBg
-    _desyncPanel.BorderSizePixel = 0
-    _desyncPanel.Active = true
-    _desyncPanel.Draggable = true
-    _desyncPanel.Parent = gui
-    Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 12)
-
-    local stroke = Instance.new("UIStroke", _desyncPanel)
-    stroke.Color = THEME.Accent
-    stroke.Thickness = 1.5
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundTransparency = 1
-    title.Text = "   ⚡ KYN Hub — Desync"
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.TextColor3 = THEME.Accent
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 13
-    title.Parent = _desyncPanel
-
-    local SpeedInput = Instance.new("TextBox")
-    SpeedInput.Size = UDim2.new(0.84, 0, 0, 34)
-    SpeedInput.Position = UDim2.new(0.08, 0, 0, 40)
-    SpeedInput.BackgroundColor3 = THEME.FrameBg2
-    SpeedInput.TextColor3 = THEME.TextLight
-    SpeedInput.Font = Enum.Font.GothamMedium
-    SpeedInput.TextSize = 14
-    SpeedInput.PlaceholderText = "Velocidad..."
-    SpeedInput.Parent = _desyncPanel
-    Instance.new("UICorner", SpeedInput).CornerRadius = UDim.new(0, 7)
-
-    local ActionButton = Instance.new("TextButton")
-    ActionButton.Size = UDim2.new(0.84, 0, 0, 42)
-    ActionButton.Position = UDim2.new(0.08, 0, 0, 86)
-    ActionButton.BackgroundColor3 = THEME.AccentDark
-    ActionButton.Text = "EJECUTAR ACCIÓN"
-    ActionButton.TextColor3 = THEME.TextLight
-    ActionButton.Font = Enum.Font.GothamBold
-    ActionButton.TextSize = 13
-    ActionButton.AutoButtonColor = false
-    ActionButton.Parent = _desyncPanel
-    Instance.new("UICorner", ActionButton).CornerRadius = UDim.new(0, 7)
-
-    if _desyncTargetTB and _desyncTargetTB.Text ~= "" then
-        SpeedInput.Text = _desyncTargetTB.Text
-    end
-
-    SpeedInput:GetPropertyChangedSignal("Text"):Connect(function()
-        if _desyncTargetTB then
-            _desyncTargetTB.Text = SpeedInput.Text
-            if firesignal then firesignal(_desyncTargetTB.FocusLost, true) end
-        end
-    end)
-
-    local function simulateClick()
-        if firesignal and _desyncTargetBtn then
-            firesignal(_desyncTargetBtn.MouseButton1Down)
-            firesignal(_desyncTargetBtn.MouseButton1Up)
-            firesignal(_desyncTargetBtn.MouseButton1Click)
-            firesignal(_desyncTargetBtn.Activated)
-        end
-    end
-
-    ActionButton.MouseButton1Click:Connect(function()
-        if not _desyncTargetIndicator then
-            ActionButton.Text = "CARGANDO..."
-            task.wait(0.4)
-            ActionButton.Text = "EJECUTAR ACCIÓN"
-            return
-        end
-
-        local currentColorHex = _desyncTargetIndicator.BackgroundColor3:ToHex():upper()
-        if currentColorHex == "00FF78" then
-            ActionButton.Text = "DOBLE CLIC!"
-            simulateClick()
-            task.wait(0.05)
-            simulateClick()
-        elseif currentColorHex == "28282D" then
-            ActionButton.Text = "UN CLIC!"
-            simulateClick()
-        else
-            ActionButton.Text = "COLOR: " .. currentColorHex
-            simulateClick()
-        end
-        task.wait(0.4)
-        ActionButton.Text = "EJECUTAR ACCIÓN"
-    end)
-end
-
-local function _loadDesync()
-    if _desyncLoaded then
-        if _desyncPanel then _desyncPanel.Visible = true end
-        return
-    end
-    _desyncLoaded = true
-
-    task.spawn(function()
-        local RobloxGui = CoreGui:WaitForChild("RobloxGui")
-        local trampa
-        trampa = RobloxGui.ChildAdded:Connect(function(child)
-            if child.Name == "ChocolaDesync" then
-                if child:IsA("ScreenGui") then child.Enabled = false end
-                child.ChildAdded:Connect(function(subChild)
-                    if subChild.Name == "Frame" then
-                        subChild.Position = UDim2.new(9999, 0, 9999, 0)
-                        subChild.Visible = false
-                    end
-                end)
-                local existingFrame = child:FindFirstChild("Frame")
-                if existingFrame then
-                    existingFrame.Position = UDim2.new(9999, 0, 9999, 0)
-                    existingFrame.Visible = false
-                end
-            end
-        end)
-
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/chocolascript-glitch/Chocola.script/refs/heads/main/Chocola-Desync-no-auto-grab.lua"))()
-
-        local ChocolaDesync = RobloxGui:WaitForChild("ChocolaDesync", 10)
-        if not ChocolaDesync then
-            warn("[KYN Hub] La GUI de Chocola no cargó.")
-            _desyncLoaded = false
-            if trampa then trampa:Disconnect() end
-            return
-        end
-
-        local mainFrame = ChocolaDesync:WaitForChild("Frame", 5)
-        task.wait(1)
-
-        local seccion4 = mainFrame:GetChildren()[4]
-        _desyncTargetBtn = seccion4.TextButton
-        _desyncTargetIndicator = _desyncTargetBtn.Frame
-        _desyncTargetTB = seccion4.Frame.Frame.TextBox
-
-        if trampa then trampa:Disconnect() end
-        _buildDesyncPanel()
-    end)
-end
-
--- ==========================================
--- // LÓGICA DE ABRIR / CERRAR
--- ==========================================
-local isOpen = false
-local isAnimating = false
-
+local isOpen, isAnimating = false, false
 local function toggleMenu()
     if isAnimating then return end
     isAnimating = true
@@ -730,60 +556,748 @@ UIS.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.RightShift then toggleMenu() end
 end)
 
--- ============================================================
--- // REGISTRAR FEATURES EN LOS TABS
--- ============================================================
-_G.KYNAddLabel("Main", "Auto Steal  —  [Próximamente]")
+-- ================= FEATURES ORIGINALES =================
+local _lagEnabled, _lagUltra, _lagConn = false, false, nil
+local function _lagOptimize(obj)
+    pcall(function()
+        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then obj.Enabled = false end
+        if obj:IsA("Decal") or obj:IsA("Texture") then obj.Transparency = 1 end
+        if obj:IsA("BasePart") then obj.Material = Enum.Material.Plastic; obj.Reflectance = 0; obj.CastShadow = false end
+        if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then obj.Enabled = false end
+        if obj:IsA("MeshPart") or obj:IsA("UnionOperation") then obj.RenderFidelity = Enum.RenderFidelity.Performance end
+        if _lagUltra and (obj:IsA("Accessory") or obj:IsA("ShirtGraphic") or obj:IsA("Shirt") or obj:IsA("Pants")) then obj:Destroy() end
+    end)
+end
+local function _lagApplyAll()
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    Lighting.Brightness = 1
+    Lighting.EnvironmentDiffuseScale  = 0
+    Lighting.EnvironmentSpecularScale = 0
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("BloomEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") then v.Enabled = false end
+    end
+    local terrain = Workspace:FindFirstChildOfClass("Terrain")
+    if terrain then terrain.WaterWaveSize=0; terrain.WaterWaveSpeed=0; terrain.WaterReflectance=0; terrain.WaterTransparency=1 end
+    for _, v in pairs(Workspace:GetDescendants()) do _lagOptimize(v) end
+end
+local function _lagEnable()
+    if _lagEnabled then return end
+    _lagEnabled = true
+    _lagUltra = true -- una sola opción Anti Lag (incluye ultra)
+    _lagApplyAll()
+    _lagConn = Workspace.DescendantAdded:Connect(_lagOptimize)
+    pcall(function() RunService:Set3dRenderingEnabled(true) end)
+    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+end
+local function _lagDisable() _lagEnabled = false; _lagUltra = false; if _lagConn then _lagConn:Disconnect(); _lagConn=nil end end
 
+local _espPlayerEnabled, _espPlayerFolder = false, nil
+local function _espPlayerInit()
+    local pg = LocalPlayer:WaitForChild("PlayerGui")
+    _espPlayerFolder = pg:FindFirstChild("KYN_PlayerESP") or Instance.new("Folder")
+    _espPlayerFolder.Name="KYN_PlayerESP"; _espPlayerFolder.Parent=pg
+end
+local function _espPlayerUpdate(player)
+    if player == LocalPlayer or not _espPlayerEnabled then return end
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = player.Character.HumanoidRootPart
+    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL")
+    if not hl then hl = Instance.new("Highlight"); hl.Name=player.Name.."_HL"; hl.FillColor=Color3.fromRGB(0,0,255); hl.FillTransparency=0.7; hl.OutlineColor=Color3.fromRGB(0,0,255); hl.OutlineTransparency=0; hl.Parent=_espPlayerFolder end
+    hl.Adornee = player.Character
+    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB")
+    if not bb then
+        bb=Instance.new("BillboardGui"); bb.Name=player.Name.."_BB"; bb.Size=UDim2.new(0,200,0,50); bb.StudsOffset=Vector3.new(0,3,0); bb.AlwaysOnTop=true; bb.Parent=_espPlayerFolder
+        local lbl = Instance.new("TextLabel"); lbl.Name="Label"; lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(0,255,255); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.SourceSansBold; lbl.TextScaled=true; lbl.Parent=bb
+    end
+    bb.Adornee = hrp
+    local lbl = bb:FindFirstChild("Label") if lbl then lbl.Text=player.Name end
+end
+local function _espPlayerClear() if _espPlayerFolder then for _, v in pairs(_espPlayerFolder:GetChildren()) do v:Destroy() end end end
+Players.PlayerRemoving:Connect(function(player)
+    if not _espPlayerFolder then return end
+    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB") if bb then bb:Destroy() end
+    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL") if hl then hl:Destroy() end
+end)
+
+local _espBaseEnabled, _espBaseOwnPos = false, nil
+local function _espBaseGetOwnPos()
+    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return nil end
+    for _, plot in ipairs(Plots:GetChildren()) do
+        local sign=plot:FindFirstChild("PlotSign"); local base=plot:FindFirstChild("DeliveryHitbox")
+        if sign and sign:FindFirstChild("YourBase") and sign.YourBase.Enabled and base then return base.Position end
+    end
+    return nil
+end
+local function _espBaseUpdate(plot)
+    local purchases = plot:FindFirstChild("Purchases") if not purchases then return end
+    local plotBlock = purchases:FindFirstChild("PlotBlock") if not plotBlock or not plotBlock:FindFirstChild("Main") then return end
+    local main = plotBlock.Main
+    local remainingTimeGui = main:FindFirstChild("BillboardGui") and main.BillboardGui:FindFirstChild("RemainingTime")
+    local base = plot:FindFirstChild("DeliveryHitbox")
+    if base and _espBaseOwnPos and (base.Position - _espBaseOwnPos).Magnitude < 1 then return end
+
+    local bb = main:FindFirstChild("KYN_Base_BB")
+    local textLabel
+    if not bb then
+        bb = Instance.new("BillboardGui"); bb.Name="KYN_Base_BB"; bb.Adornee=main; bb.Size=UDim2.new(0,200,0,50); bb.StudsOffset=Vector3.new(0,5,0); bb.AlwaysOnTop=true; bb.Parent=main
+        textLabel = Instance.new("TextLabel"); textLabel.Name="Label"; textLabel.Size=UDim2.new(1,0,1,0); textLabel.BackgroundTransparency=1; textLabel.TextColor3=Color3.fromRGB(255,255,255); textLabel.TextStrokeTransparency=0; textLabel.Font=Enum.Font.SourceSansBold; textLabel.TextScaled=true; textLabel.Text="Cargando..."; textLabel.Parent=bb
+    else textLabel = bb:FindFirstChild("Label") end
+
+    if textLabel and remainingTimeGui then
+        if remainingTimeGui:IsA("TextLabel") then
+            local t = remainingTimeGui.Text
+            if t == "0s" or t == "0" then textLabel.Text="Desbloqueado"; textLabel.TextColor3=Color3.fromRGB(0,255,0)
+            else textLabel.Text=t; textLabel.TextColor3=Color3.fromRGB(255,255,255) end
+        elseif remainingTimeGui:IsA("NumberValue") then
+            if remainingTimeGui.Value <= 0 then textLabel.Text="Desbloqueado"; textLabel.TextColor3=Color3.fromRGB(0,255,0)
+            else textLabel.Text="Tiempo: "..remainingTimeGui.Value.."s"; textLabel.TextColor3=Color3.fromRGB(255,255,255) end
+        end
+    end
+end
+local function _espBaseClear()
+    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+    for _, plot in ipairs(Plots:GetChildren()) do
+        local purchases = plot:FindFirstChild("Purchases")
+        if purchases then local pb = purchases:FindFirstChild("PlotBlock"); if pb and pb:FindFirstChild("Main") then local bb = pb.Main:FindFirstChild("KYN_Base_BB"); if bb then bb:Destroy() end end end
+    end
+end
+
+local _espStealersEnabled = false
+local function _espStealersApply(char, player)
+    local hl = Instance.new("Highlight")
+    hl.Name = "KYN_StealerHL"; hl.FillColor=Color3.fromRGB(255,100,0); hl.OutlineColor=Color3.fromRGB(255,200,0); hl.FillTransparency=0.5; hl.OutlineTransparency=0; hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; hl.Parent=char
+    local root = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+    if root then
+        local bb = Instance.new("BillboardGui")
+        bb.Name="KYN_StealerBB"; bb.Size=UDim2.new(0,150,0,40); bb.StudsOffset=Vector3.new(0,4.5,0); bb.AlwaysOnTop=true; bb.Parent=root
+        local lbl = Instance.new("TextLabel")
+        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text="🎒 "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
+    end
+end
+local function _espStealersGetRobbing()
+    local robbing = {}
+    local tagged = CollectionService:GetTagged("ClientRenderBrainrot")
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        local char = player.Character
+        if char then
+            for _, obj in pairs(tagged) do
+                if obj:IsDescendantOf(char) then robbing[player] = true; break end
+                local attr = obj:GetAttribute("__render_stolen")
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if attr == true and root and obj:IsA("BasePart") and (obj.Position - root.Position).Magnitude < 7 then robbing[player] = true; break end
+            end
+        end
+    end
+    return robbing
+end
+local function _espStealersClearAll()
+    for _, player in ipairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char then
+            local hl = char:FindFirstChild("KYN_StealerHL") if hl then hl:Destroy() end
+            local root = char:FindFirstChild("HumanoidRootPart") if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+        end
+    end
+end
+
+local _xrayEnabled, _xrayConn = false, nil
+local function _xrayStart()
+    if _xrayConn then _xrayConn:Disconnect() end
+    _xrayConn = RunService.Heartbeat:Connect(function()
+        local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+        for _, Plot in ipairs(Plots:GetChildren()) do
+            if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
+                for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0.8 end end
+            end
+        end
+    end)
+end
+local function _xrayStop()
+    if _xrayConn then _xrayConn:Disconnect(); _xrayConn=nil end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if Plots then
+        for _, Plot in ipairs(Plots:GetChildren()) do
+            if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
+                for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 1 end end
+            end
+        end
+    end
+end
+
+local _ijEnabled, _ijJumping, _ijCharacter = false, false, (LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait())
+LocalPlayer.CharacterAdded:Connect(function(char) _ijCharacter = char end)
+RunService.Heartbeat:Connect(function()
+    if not _ijEnabled or not _ijCharacter then return end
+    local hrp = _ijCharacter:FindFirstChild("HumanoidRootPart")
+    if hrp then local vel = hrp.AssemblyLinearVelocity; if vel.Y < -80 then hrp.AssemblyLinearVelocity = Vector3.new(vel.X, -80, vel.Z) end end
+end)
+UIS.JumpRequest:Connect(function()
+    if not _ijEnabled or _ijJumping or not _ijCharacter then return end
+    local hum = _ijCharacter:FindFirstChildOfClass("Humanoid")
+    local hrp = _ijCharacter:FindFirstChild("HumanoidRootPart")
+    if hum and hrp then
+        _ijJumping = true
+        local force = math.random(45, 52)
+        local vel   = hrp.AssemblyLinearVelocity
+        hrp.AssemblyLinearVelocity = Vector3.new(vel.X, force, vel.Z)
+        task.wait(math.random(5, 15) / 100)
+        _ijJumping = false
+    end
+end)
+
+local _arEnabled = false
+local _antiKnockbackController = nil
+
+local function setupAntiKnockback()
+    local isEnabled = false
+    local connections = {}
+
+    local function shouldApplyAntiKnockback(humanoid)
+        local state = humanoid:GetState()
+        local knockoutStates = {
+            [Enum.HumanoidStateType.Physics] = true,
+            [Enum.HumanoidStateType.Ragdoll] = true,
+            [Enum.HumanoidStateType.FallingDown] = true,
+            [Enum.HumanoidStateType.GettingUp] = true
+        }
+        return not knockoutStates[state]
+    end
+
+    local function enableControls(player)
+        pcall(function()
+            local playerScripts = player:WaitForChild("PlayerScripts")
+            local playerModule = playerScripts:WaitForChild("PlayerModule")
+            require(playerModule):GetControls():Enable()
+        end)
+    end
+
+    local function cleanCharacter(character, cleanBodyMovers)
+        for _, descendant in pairs(character:GetDescendants()) do
+            if descendant:IsA("BallSocketConstraint") or descendant:IsA("NoCollisionConstraint") or descendant:IsA("HingeConstraint") or (descendant:IsA("Attachment") and (descendant.Name == "A" or descendant.Name == "B")) then
+                descendant:Destroy()
+            elseif cleanBodyMovers and (descendant:IsA("BodyVelocity") or descendant:IsA("BodyPosition") or descendant:IsA("BodyGyro")) then
+                descendant:Destroy()
+            end
+        end
+        for _, descendant in pairs(character:GetDescendants()) do
+            if descendant:IsA("Motor6D") then descendant.Enabled = true end
+        end
+    end
+
+    local function stopKnockbackAnimations(animator)
+        for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+            if track.Animation then
+                local animName = track.Animation.Name:lower()
+                if animName:find("rag") or animName:find("fall") or animName:find("hurt") or animName:find("down") or animName:find("knock") or animName:find("stun") then
+                    track:Stop(0)
+                end
+            end
+        end
+    end
+
+    local function enableAntiKnockback()
+        if isEnabled then return end
+        isEnabled = true
+
+        local localPlayer = Players.LocalPlayer
+        local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+        local humanoid = character:WaitForChild("Humanoid")
+        local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+        local camera = Workspace.CurrentCamera
+        local animator = humanoid:WaitForChild("Animator")
+
+        local velocityChangeThreshold = 40
+        local minVelocityMagnitude = 25
+        local maxVelocityMagnitude = 15
+        local cleanBodyMovers = true
+        local lastVelocity = Vector3.new(0, 0, 0)
+
+        table.insert(connections, humanoid.StateChanged:Connect(function()
+            if shouldApplyAntiKnockback(humanoid) then
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                cleanCharacter(character, cleanBodyMovers)
+                stopKnockbackAnimations(animator)
+                camera.CameraSubject = humanoid
+                enableControls(localPlayer)
+            end
+        end))
+
+        pcall(function()
+            local packages = ReplicatedStorage:FindFirstChild("Packages")
+            local net = packages and packages:FindFirstChild("Net")
+            local impulse = net and net:FindFirstChild("RE/CombatService/ApplyImpulse")
+            if impulse and impulse:IsA("RemoteEvent") then
+                table.insert(connections, impulse.OnClientEvent:Connect(function()
+                    if shouldApplyAntiKnockback(humanoid) then
+                        humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    end
+                end))
+            end
+        end)
+
+        table.insert(connections, character.DescendantAdded:Connect(function()
+            if shouldApplyAntiKnockback(humanoid) then
+                cleanCharacter(character, cleanBodyMovers)
+                stopKnockbackAnimations(animator)
+            end
+        end))
+
+        table.insert(connections, RunService.Heartbeat:Connect(function()
+            if shouldApplyAntiKnockback(humanoid) then
+                cleanCharacter(character, cleanBodyMovers)
+                stopKnockbackAnimations(animator)
+                local currentVelocity = humanoidRootPart.AssemblyLinearVelocity
+                local velocityChange = (currentVelocity - lastVelocity).Magnitude
+                if velocityChange > velocityChangeThreshold and currentVelocity.Magnitude > minVelocityMagnitude then
+                    local limitedVelocity = currentVelocity.Unit * math.min(currentVelocity.Magnitude, maxVelocityMagnitude)
+                    humanoidRootPart.AssemblyLinearVelocity = limitedVelocity
+                end
+                lastVelocity = currentVelocity
+            end
+        end))
+
+        enableControls(localPlayer)
+        cleanCharacter(character, cleanBodyMovers)
+        stopKnockbackAnimations(animator)
+
+        table.insert(connections, localPlayer.CharacterAdded:Connect(function(newCharacter)
+            character = newCharacter
+            humanoid = newCharacter:WaitForChild("Humanoid")
+            humanoidRootPart = newCharacter:WaitForChild("HumanoidRootPart")
+            animator = humanoid:WaitForChild("Animator")
+            lastVelocity = Vector3.new(0, 0, 0)
+            enableControls(localPlayer)
+            cleanCharacter(newCharacter, cleanBodyMovers)
+            stopKnockbackAnimations(animator)
+        end))
+    end
+
+    local function disableAntiKnockback()
+        if not isEnabled then return end
+        isEnabled = false
+        for _, connection in pairs(connections) do if connection then connection:Disconnect() end end
+        connections = {}
+    end
+
+    return {
+        Enable = enableAntiKnockback,
+        Disable = disableAntiKnockback,
+        IsEnabled = function() return isEnabled end
+    }
+end
+
+_antiKnockbackController = setupAntiKnockback()
+
+local _freezeEnabled = false
+local function _setFreezeAnims(state)
+    _freezeEnabled = state
+    local character = LocalPlayer.Character if not character then return end
+    local hum = character:FindFirstChildOfClass("Humanoid") if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator") if not animator then return end
+    for _, track in pairs(animator:GetPlayingAnimationTracks()) do pcall(function() track:AdjustSpeed(state and 0 or 1) end) end
+end
+
+
+-- Anti Torret
+local _antiTorretEnabled = false
+local _antiTorretTarget = nil
+local _antiTorretConn = nil
+local _antiTorretDetectionDistance = 60
+local _antiTorretPullDistance = -5
+
+local function _antiTorretGetCharacter() return LocalPlayer.Character end
+local function _antiTorretGetWeapon()
+    local char = _antiTorretGetCharacter()
+    if not char then return nil end
+    return LocalPlayer.Backpack:FindFirstChild("Bat") or char:FindFirstChild("Bat")
+end
+local function _antiTorretFindTarget()
+    local char = _antiTorretGetCharacter()
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+    local rootPos = char.HumanoidRootPart.Position
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj.Name:find("Sentry") and not obj.Name:lower():find("bullet") then
+            local ownerId = obj.Name:match("Sentry_(%d+)")
+            if ownerId and tonumber(ownerId) == LocalPlayer.UserId then
+                continue
+            end
+            local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
+            if part and (rootPos - part.Position).Magnitude <= _antiTorretDetectionDistance then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+local function _antiTorretMoveTarget(obj)
+    local char = _antiTorretGetCharacter()
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    for _, part in pairs(obj:GetDescendants()) do
+        if part:IsA("BasePart") then part.CanCollide = false end
+    end
+    local root = char.HumanoidRootPart
+    local cf = root.CFrame * CFrame.new(0, 0, _antiTorretPullDistance)
+    if obj:IsA("BasePart") then
+        obj.CFrame = cf
+    elseif obj:IsA("Model") then
+        local main = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+        if main then main.CFrame = cf end
+    end
+end
+local function _antiTorretAttack()
+    local char = _antiTorretGetCharacter()
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local weapon = _antiTorretGetWeapon()
+    if not weapon then return end
+    if weapon.Parent == LocalPlayer.Backpack then
+        hum:EquipTool(weapon)
+        task.wait(0.1)
+    end
+    local handle = weapon:FindFirstChild("Handle")
+    if handle then handle.CanCollide = false end
+    pcall(function() weapon:Activate() end)
+    for _, r in pairs(weapon:GetDescendants()) do
+        if r:IsA("RemoteEvent") then pcall(function() r:FireServer() end) end
+    end
+end
+local function _antiTorretStart()
+    if _antiTorretConn then return end
+    _antiTorretConn = RunService.Heartbeat:Connect(function()
+        if not _antiTorretEnabled then return end
+        if _antiTorretTarget and _antiTorretTarget.Parent == workspace then
+            _antiTorretMoveTarget(_antiTorretTarget)
+            _antiTorretAttack()
+        else
+            _antiTorretTarget = _antiTorretFindTarget()
+        end
+    end)
+end
+local function _antiTorretStop()
+    if _antiTorretConn then _antiTorretConn:Disconnect(); _antiTorretConn = nil end
+    _antiTorretTarget = nil
+end
+
+-- Anti Bee & Disco
+local _antiBeeDiscoEnabled = false
+local _antiBeeDiscoConns = {}
+local _antiBeeMoveVector = Vector3.zero
+local _antiBeeFOVLock = 70
+local _antiBeeBlacklist = {
+    "BlurEffect","ColorCorrectionEffect","BloomEffect","SunRaysEffect","DepthOfFieldEffect","Atmosphere","Sky","Smoke","ParticleEmitter","Beam","Trail","Highlight","PostEffect","SurfaceAppearance","Fire","Sparkles","Explosion","PointLight","SpotLight","SurfaceLight","Shadows","Blur","Fog","ColorGradingEffect","ToneMappingEffect","VignetteEffect","GodRays","Glare","ChromaticAberrationEffect","DistortionEffect","LensFlare","SunFlare","LightInfluence","AmbientOcclusionEffect","RefractionEffect","HeatDistortion","GlitchEffect","ScreenSpaceReflection","MotionBlur","VolumetricLight","RainEffect","SnowEffect","LightningEffect","NeonGlow","ContrastCorrection","ShadowMap","Bloom","Clouds","FogVolume","WaterEffect","WindEffect","PixelateEffect","FilmGrainEffect","CRTShader","NightVisionEffect","InfraredEffect","HazeEffect","ColorBalanceEffect","DynamicLight","AmbientEffect","ScreenDistortion","ScanlineEffect","UnderwaterEffect","ThermalVision","ShockwaveEffect","FlashEffect","ExplosionLight","VFXPart","GlitchScreen","ScreenFlash","OverlayEffect","ShadowEffect","GhostEffect","FogEmitter","WindEmitter","HeatWave","SunGlow","ColorOverlay","VisionDistort","EchoEffect","ScreenOverlay","RenderEffect","VisualEffect","LightingEffect","CameraEffect","WeatherEffect","SmokeTrail","FireTrail","NeonEffect","RefractionLayer","PostProcessingEffect","VisualNoise","ScreenNoise"
+}
+local function _antiBeeIsBlacklisted(obj)
+    for _, name in ipairs(_antiBeeBlacklist) do if obj:IsA(name) then return true end end
+    return false
+end
+local function _antiBeeClearEffects()
+    for _, v in pairs(Lighting:GetDescendants()) do
+        if _antiBeeIsBlacklisted(v) then pcall(function() v:Destroy() end) end
+    end
+end
+local function _antiBeeEnable()
+    if _antiBeeDiscoEnabled then return end
+    _antiBeeDiscoEnabled = true
+    _antiBeeClearEffects()
+    table.insert(_antiBeeDiscoConns, Lighting.DescendantAdded:Connect(function(obj) task.wait(); if _antiBeeIsBlacklisted(obj) then pcall(function() obj:Destroy() end) end end))
+    table.insert(_antiBeeDiscoConns, RunService.RenderStepped:Connect(function()
+        local camera = workspace.CurrentCamera
+        if camera and camera.FieldOfView ~= _antiBeeFOVLock then camera.FieldOfView = _antiBeeFOVLock end
+    end))
+    table.insert(_antiBeeDiscoConns, UIS.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Gamepad1 or input.UserInputType == Enum.UserInputType.Touch then
+            if input.KeyCode == Enum.KeyCode.Thumbstick1 then _antiBeeMoveVector = Vector3.new(input.Position.X, 0, -input.Position.Y) end
+        end
+    end))
+    table.insert(_antiBeeDiscoConns, RunService.RenderStepped:Connect(function()
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:Move(_antiBeeMoveVector, true) end
+        end
+    end))
+end
+local function _antiBeeDisable()
+    _antiBeeDiscoEnabled = false
+    for _, c in ipairs(_antiBeeDiscoConns) do pcall(function() c:Disconnect() end) end
+    _antiBeeDiscoConns = {}
+    _antiBeeMoveVector = Vector3.zero
+end
+
+local _desyncLoaded, _desyncPanel, _desyncTargetBtn, _desyncTargetIndicator, _desyncTargetTB = false, nil, nil, nil, nil
+local function _buildDesyncPanel()
+    if _desyncPanel then pcall(function() _desyncPanel:Destroy() end) end
+
+    _desyncPanel = Instance.new("Frame")
+    _desyncPanel.Name = "KYN_DesyncPanel"
+    _desyncPanel.Size = UDim2.new(0, 220, 0, 135)
+    _desyncPanel.Position = UDim2.new(1, -230, 0.5, -68)
+    _desyncPanel.BackgroundColor3 = THEME.FrameBg
+    _desyncPanel.BorderSizePixel = 0
+    _desyncPanel.Active = true
+    _desyncPanel.Draggable = true
+    _desyncPanel.Parent = gui
+    Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
+    local dStroke = Instance.new("UIStroke", _desyncPanel)
+    dStroke.Color = THEME.Accent
+    dStroke.Thickness = 1.5
+
+    local dTitle = Instance.new("TextLabel")
+    dTitle.Size = UDim2.new(1, 0, 0, 30)
+    dTitle.BackgroundTransparency = 1
+    dTitle.Text = "   ⚡ KYN Hub — Desync"
+    dTitle.Font = Enum.Font.GothamBold
+    dTitle.TextSize = 13
+    dTitle.TextXAlignment = Enum.TextXAlignment.Left
+    dTitle.TextColor3 = THEME.Accent
+    dTitle.Parent = _desyncPanel
+
+    local speedInput = Instance.new("TextBox")
+    speedInput.Size = UDim2.new(0.85, 0, 0, 32)
+    speedInput.Position = UDim2.new(0.075, 0, 0, 36)
+    speedInput.BackgroundColor3 = THEME.FrameBg2
+    speedInput.TextColor3 = THEME.TextLight
+    speedInput.Font = Enum.Font.GothamMedium
+    speedInput.TextSize = 13
+    speedInput.PlaceholderText = "Velocidad..."
+    speedInput.Parent = _desyncPanel
+    Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 6)
+
+    local actionBtn = Instance.new("TextButton")
+    actionBtn.Size = UDim2.new(0.85, 0, 0, 38)
+    actionBtn.Position = UDim2.new(0.075, 0, 0, 82)
+    actionBtn.BackgroundColor3 = THEME.AccentDark
+    actionBtn.Text = "EJECUTAR DESYNC"
+    actionBtn.TextColor3 = THEME.TextLight
+    actionBtn.Font = Enum.Font.GothamBold
+    actionBtn.TextSize = 13
+    actionBtn.AutoButtonColor = false
+    actionBtn.Parent = _desyncPanel
+    Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 6)
+
+    if _desyncTargetTB then
+        pcall(function() speedInput.Text = _desyncTargetTB.Text or "" end)
+        speedInput:GetPropertyChangedSignal("Text"):Connect(function()
+            pcall(function()
+                if _desyncTargetTB then
+                    _desyncTargetTB.Text = speedInput.Text
+                    if firesignal then firesignal(_desyncTargetTB.FocusLost, true) end
+                end
+            end)
+        end)
+    end
+
+    actionBtn.MouseButton1Click:Connect(function()
+        if not _desyncTargetBtn then
+            actionBtn.Text = "Cargando..."; task.wait(0.5); actionBtn.Text = "EJECUTAR DESYNC"; return
+        end
+        local function simClick()
+            pcall(function()
+                if firesignal then
+                    firesignal(_desyncTargetBtn.MouseButton1Down)
+                    firesignal(_desyncTargetBtn.MouseButton1Up)
+                    firesignal(_desyncTargetBtn.MouseButton1Click)
+                    firesignal(_desyncTargetBtn.Activated)
+                elseif getconnections then
+                    for _, c in pairs(getconnections(_desyncTargetBtn.MouseButton1Click)) do if c.Function then c.Function() end end
+                end
+            end)
+        end
+        local ok, colorHex = pcall(function() return _desyncTargetIndicator.BackgroundColor3:ToHex():upper() end)
+        if ok then
+            if colorHex == "00FF78" then actionBtn.Text = "DOBLE CLIC!"; simClick(); task.wait(0.05); simClick()
+            elseif colorHex == "28282D" then actionBtn.Text = "UN CLIC!"; simClick()
+            else actionBtn.Text = "COLOR: "..colorHex; simClick() end
+        else actionBtn.Text = "EJECUTANDO..."; simClick() end
+        task.wait(0.4)
+        actionBtn.Text = "EJECUTAR DESYNC"
+    end)
+end
+
+local function _loadDesync()
+    if _desyncLoaded then if _desyncPanel then _desyncPanel.Visible = true end return end
+    _desyncLoaded = true
+
+    task.spawn(function()
+        local RobloxGui = CoreGui:WaitForChild("RobloxGui")
+        local trampa
+        trampa = RobloxGui.ChildAdded:Connect(function(child)
+            if child.Name == "ChocolaDesync" then
+                if child:IsA("ScreenGui") then child.Enabled = false end
+                child.ChildAdded:Connect(function(subChild)
+                    if subChild.Name == "Frame" then
+                        subChild.Position = UDim2.new(9999, 0, 9999, 0)
+                        subChild.Visible = false
+                    end
+                end)
+                local existingFrame = child:FindFirstChild("Frame")
+                if existingFrame then existingFrame.Position = UDim2.new(9999, 0, 9999, 0); existingFrame.Visible = false end
+            end
+        end)
+
+        local success = pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/chocolascript-glitch/Chocola.script/refs/heads/main/Chocola-Desync-no-auto-grab.lua"))()
+        end)
+        if not success then
+            warn("[KYN Hub] No se pudo cargar el Desync externo.")
+            _desyncLoaded = false
+            if trampa then trampa:Disconnect() end
+            return
+        end
+
+        local ChocolaDesync = RobloxGui:WaitForChild("ChocolaDesync", 10)
+        if not ChocolaDesync then
+            warn("[KYN Hub] ChocolaDesync no apareció en el tiempo esperado.")
+            _desyncLoaded = false
+            if trampa then trampa:Disconnect() end
+            return
+        end
+        if trampa then trampa:Disconnect() end
+
+        local desyncFrame = ChocolaDesync:WaitForChild("Frame", 5)
+        if not desyncFrame then return end
+        task.wait(1)
+        pcall(function()
+            local seccion4 = desyncFrame:GetChildren()[4]
+            _desyncTargetBtn = seccion4.TextButton
+            _desyncTargetIndicator = _desyncTargetBtn.Frame
+            _desyncTargetTB = seccion4.Frame.Frame.TextBox
+        end)
+        _buildDesyncPanel()
+    end)
+end
+
+local function _runAutoClone()
+    local character = LocalPlayer.Character
+    if not character then warn("[KYN Hub] No hay personaje."); return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return end
+
+    local clonerTool = LocalPlayer.Backpack:FindFirstChild("Quantum Cloner") or character:FindFirstChild("Quantum Cloner")
+    if not clonerTool then warn("[KYN Hub] No se encontró 'Quantum Cloner' en el inventario."); return end
+    if clonerTool.Parent ~= character then humanoid:EquipTool(clonerTool) end
+    clonerTool:Activate()
+
+    task.delay(0.2, function()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui") if not pg then return end
+        local tf = pg:FindFirstChild("ToolsFrames") if not tf then return end
+        local cloneUI = tf:FindFirstChild("QuantumCloner") if not cloneUI then return end
+        local tpButton = cloneUI:FindFirstChild("TeleportToClone") if not tpButton then return end
+        pcall(function()
+            if firesignal then firesignal(tpButton.MouseButton1Up)
+            elseif getconnections then for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do if c.Function then c.Function() end end end
+        end)
+    end)
+end
+
+cloneQuickBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(cloneQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
+    _runAutoClone()
+    task.wait(0.15)
+    TweenService:Create(cloneQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.AccentDark}):Play()
+end)
+
+-- BUCLES/RESPAWN
+task.spawn(function()
+    while true do
+        if _espPlayerEnabled and _espPlayerFolder then for _, player in pairs(Players:GetPlayers()) do pcall(function() _espPlayerUpdate(player) end) end end
+        if _espBaseEnabled then
+            _espBaseOwnPos = _espBaseGetOwnPos()
+            local Plots = Workspace:FindFirstChild("Plots")
+            if Plots then for _, plot in pairs(Plots:GetChildren()) do pcall(function() _espBaseUpdate(plot) end) end end
+        end
+        if _espStealersEnabled then
+            local robbing = _espStealersGetRobbing()
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player == LocalPlayer then continue end
+                local char = player.Character
+                if char then
+                    local hasESP = char:FindFirstChild("KYN_StealerHL")
+                    if robbing[player] then if not hasESP then _espStealersApply(char, player) end
+                    else
+                        if hasESP then hasESP:Destroy() end
+                        local root = char:FindFirstChild("HumanoidRootPart")
+                        if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+                    end
+                end
+            end
+        else
+            _espStealersClearAll()
+        end
+        task.wait(0.5)
+    end
+end)
+
+task.spawn(function()
+    local Plots = Workspace:WaitForChild("Plots", 15)
+    if Plots then
+        Plots.ChildAdded:Connect(function(plot)
+            task.wait(0.8)
+            if _espBaseEnabled then pcall(function() _espBaseUpdate(plot) end) end
+        end)
+    end
+end)
+
+_espPlayerInit()
+LocalPlayer.CharacterAdded:Connect(function(char)
+    _ijCharacter = char
+    if _freezeEnabled then task.wait(0.5); _setFreezeAnims(true) end
+    if _arEnabled and _antiKnockbackController then task.wait(0.2); _antiKnockbackController.Enable() end
+    if _antiTorretEnabled then _antiTorretStart() else _antiTorretStop() end
+end)
+if LocalPlayer.Character and _arEnabled and _antiKnockbackController then
+    task.spawn(function() task.wait(0.2); _antiKnockbackController.Enable() end)
+end
+
+-- REGISTRAR FEATURES
+_G.KYNAddLabel("Main", "Auto Steal  —  [Próximamente]")
 _G.KYNAddToggle("Main", {
     Name = "Auto Desync",
     Default = SETTINGS.AutoDesync,
     Callback = function(state)
         setSetting("AutoDesync", state)
-        if state then
-            _loadDesync()
-        else
-            if _desyncPanel then _desyncPanel.Visible = false end
-        end
+        if state then _loadDesync() else if _desyncPanel then _desyncPanel.Visible = false end end
     end
 })
-
-_G.KYNAddButton("Main", {
-    Name = "Clone & TP",
-    Callback = function()
-        _runAutoClone()
-    end
-})
+_G.KYNAddButton("Main", {Name = "Clone & TP", Callback = function() _runAutoClone() end})
 
 _G.KYNAddToggle("Visual", {
     Name = "ESP Jugadores",
     Default = SETTINGS.ESPJugadores,
     Callback = function(state)
         setSetting("ESPJugadores", state)
+        _espPlayerEnabled = state
+        if not state then _espPlayerClear() end
     end
 })
-
 _G.KYNAddToggle("Visual", {
     Name = "ESP Base Time",
     Default = SETTINGS.ESPBaseTime,
     Callback = function(state)
         setSetting("ESPBaseTime", state)
+        _espBaseEnabled = state
+        if not state then _espBaseClear() end
     end
 })
-
 _G.KYNAddToggle("Visual", {
     Name = "ESP Ladrones",
     Default = SETTINGS.ESPLadrones,
     Callback = function(state)
         setSetting("ESPLadrones", state)
+        _espStealersEnabled = state
+        if not state then _espStealersClearAll() end
     end
 })
-
 _G.KYNAddToggle("Visual", {
     Name = "X-Ray Base",
     Default = SETTINGS.XRayBase,
     Callback = function(state)
         setSetting("XRayBase", state)
+        _xrayEnabled = state
+        if state then _xrayStart() else _xrayStop() end
     end
 })
 
@@ -792,17 +1306,20 @@ _G.KYNAddToggle("Misc", {
     Default = SETTINGS.InfiniteJump,
     Callback = function(state)
         setSetting("InfiniteJump", state)
+        _ijEnabled = state
     end
 })
-
 _G.KYNAddToggle("Misc", {
     Name = "Anti Ragdoll",
     Default = SETTINGS.AntiRagdoll,
     Callback = function(state)
         setSetting("AntiRagdoll", state)
+        _arEnabled = state
+        if _antiKnockbackController then
+            if state then _antiKnockbackController.Enable() else _antiKnockbackController.Disable() end
+        end
     end
 })
-
 _G.KYNAddToggle("Misc", {
     Name = "Anti Lag",
     Default = SETTINGS.AntiLag,
@@ -811,12 +1328,29 @@ _G.KYNAddToggle("Misc", {
         if state then _lagEnable() else _lagDisable() end
     end
 })
-
+_G.KYNAddToggle("Misc", {
+    Name = "Anti Torret",
+    Default = SETTINGS.AntiTorret,
+    Callback = function(state)
+        setSetting("AntiTorret", state)
+        _antiTorretEnabled = state
+        if state then _antiTorretStart() else _antiTorretStop() end
+    end
+})
+_G.KYNAddToggle("Misc", {
+    Name = "Anti bee & disco",
+    Default = SETTINGS.AntiBeeDisco,
+    Callback = function(state)
+        setSetting("AntiBeeDisco", state)
+        if state then _antiBeeEnable() else _antiBeeDisable() end
+    end
+})
 _G.KYNAddToggle("Misc", {
     Name = "Freeze Animaciones",
     Default = SETTINGS.FreezeAnimaciones,
     Callback = function(state)
         setSetting("FreezeAnimaciones", state)
+        _setFreezeAnims(state)
     end
 })
 
