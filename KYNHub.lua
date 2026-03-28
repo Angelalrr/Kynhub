@@ -762,7 +762,7 @@ local function setupAntiKnockback()
             [Enum.HumanoidStateType.FallingDown] = true,
             [Enum.HumanoidStateType.GettingUp] = true
         }
-        return not knockoutStates[state]
+        return knockoutStates[state]
     end
 
     local function enableControls(player)
@@ -814,13 +814,17 @@ local function setupAntiKnockback()
         local cleanBodyMovers = true
         local lastVelocity = Vector3.new(0, 0, 0)
 
-        table.insert(connections, humanoid.StateChanged:Connect(function()
+        table.insert(connections, humanoid.StateChanged:Connect(function(_, newState)
             if shouldApplyAntiKnockback(humanoid) then
+                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                task.wait()
                 humanoid:ChangeState(Enum.HumanoidStateType.Running)
                 cleanCharacter(character, cleanBodyMovers)
                 stopKnockbackAnimations(animator)
                 camera.CameraSubject = humanoid
                 enableControls(localPlayer)
+            elseif newState == Enum.HumanoidStateType.Jumping then
+                -- no interferir con el salto normal
             end
         end))
 
@@ -851,8 +855,10 @@ local function setupAntiKnockback()
                 local currentVelocity = humanoidRootPart.AssemblyLinearVelocity
                 local velocityChange = (currentVelocity - lastVelocity).Magnitude
                 if velocityChange > velocityChangeThreshold and currentVelocity.Magnitude > minVelocityMagnitude then
-                    local limitedVelocity = currentVelocity.Unit * math.min(currentVelocity.Magnitude, maxVelocityMagnitude)
-                    humanoidRootPart.AssemblyLinearVelocity = limitedVelocity
+                    if currentVelocity.Magnitude > 0 then
+                        local limitedVelocity = currentVelocity.Unit * math.min(currentVelocity.Magnitude, maxVelocityMagnitude)
+                        humanoidRootPart.AssemblyLinearVelocity = limitedVelocity
+                    end
                 end
                 lastVelocity = currentVelocity
             end
@@ -984,7 +990,6 @@ end
 -- Anti Bee & Disco
 local _antiBeeDiscoEnabled = false
 local _antiBeeDiscoConns = {}
-local _antiBeeMoveVector = Vector3.zero
 local _antiBeeFOVLock = 70
 local _antiBeeBlacklist = {
     "BlurEffect","ColorCorrectionEffect","BloomEffect","SunRaysEffect","DepthOfFieldEffect","Atmosphere","Sky","Smoke","ParticleEmitter","Beam","Trail","Highlight","PostEffect","SurfaceAppearance","Fire","Sparkles","Explosion","PointLight","SpotLight","SurfaceLight","Shadows","Blur","Fog","ColorGradingEffect","ToneMappingEffect","VignetteEffect","GodRays","Glare","ChromaticAberrationEffect","DistortionEffect","LensFlare","SunFlare","LightInfluence","AmbientOcclusionEffect","RefractionEffect","HeatDistortion","GlitchEffect","ScreenSpaceReflection","MotionBlur","VolumetricLight","RainEffect","SnowEffect","LightningEffect","NeonGlow","ContrastCorrection","ShadowMap","Bloom","Clouds","FogVolume","WaterEffect","WindEffect","PixelateEffect","FilmGrainEffect","CRTShader","NightVisionEffect","InfraredEffect","HazeEffect","ColorBalanceEffect","DynamicLight","AmbientEffect","ScreenDistortion","ScanlineEffect","UnderwaterEffect","ThermalVision","ShockwaveEffect","FlashEffect","ExplosionLight","VFXPart","GlitchScreen","ScreenFlash","OverlayEffect","ShadowEffect","GhostEffect","FogEmitter","WindEmitter","HeatWave","SunGlow","ColorOverlay","VisionDistort","EchoEffect","ScreenOverlay","RenderEffect","VisualEffect","LightingEffect","CameraEffect","WeatherEffect","SmokeTrail","FireTrail","NeonEffect","RefractionLayer","PostProcessingEffect","VisualNoise","ScreenNoise"
@@ -1007,24 +1012,11 @@ local function _antiBeeEnable()
         local camera = workspace.CurrentCamera
         if camera and camera.FieldOfView ~= _antiBeeFOVLock then camera.FieldOfView = _antiBeeFOVLock end
     end))
-    table.insert(_antiBeeDiscoConns, UIS.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Gamepad1 or input.UserInputType == Enum.UserInputType.Touch then
-            if input.KeyCode == Enum.KeyCode.Thumbstick1 then _antiBeeMoveVector = Vector3.new(input.Position.X, 0, -input.Position.Y) end
-        end
-    end))
-    table.insert(_antiBeeDiscoConns, RunService.RenderStepped:Connect(function()
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum:Move(_antiBeeMoveVector, true) end
-        end
-    end))
 end
 local function _antiBeeDisable()
     _antiBeeDiscoEnabled = false
     for _, c in ipairs(_antiBeeDiscoConns) do pcall(function() c:Disconnect() end) end
     _antiBeeDiscoConns = {}
-    _antiBeeMoveVector = Vector3.zero
 end
 
 local _desyncLoaded, _desyncPanel, _desyncTargetBtn, _desyncTargetIndicator, _desyncTargetTB = false, nil, nil, nil, nil
@@ -1187,8 +1179,9 @@ local function _runAutoClone()
         local cloneUI = tf:FindFirstChild("QuantumCloner") if not cloneUI then return end
         local tpButton = cloneUI:FindFirstChild("TeleportToClone") if not tpButton then return end
         pcall(function()
-            if firesignal then firesignal(tpButton.MouseButton1Up)
-            elseif getconnections then for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do if c.Function then c.Function() end end end
+            if tpButton:IsA("GuiButton") then
+                tpButton:Activate()
+            end
         end)
     end)
 end
