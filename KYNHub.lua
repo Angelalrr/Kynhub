@@ -679,14 +679,15 @@ local function _espStealersGetRobbing()
     local robbing = {}
     local tagged = CollectionService:GetTagged("ClientRenderBrainrot")
     for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        local char = player.Character
-        if char then
-            for _, obj in pairs(tagged) do
-                if obj:IsDescendantOf(char) then robbing[player] = true; break end
-                local attr = obj:GetAttribute("__render_stolen")
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if attr == true and root and obj:IsA("BasePart") and (obj.Position - root.Position).Magnitude < 7 then robbing[player] = true; break end
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char then
+                for _, obj in pairs(tagged) do
+                    if obj:IsDescendantOf(char) then robbing[player] = true; break end
+                    local attr = obj:GetAttribute("__render_stolen")
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if attr == true and root and obj:IsA("BasePart") and (obj.Position - root.Position).Magnitude < 7 then robbing[player] = true; break end
+                end
             end
         end
     end
@@ -926,12 +927,11 @@ local function _antiTorretFindTarget()
     for _, obj in pairs(workspace:GetChildren()) do
         if obj.Name:find("Sentry") and not obj.Name:lower():find("bullet") then
             local ownerId = obj.Name:match("Sentry_(%d+)")
-            if ownerId and tonumber(ownerId) == LocalPlayer.UserId then
-                continue
-            end
-            local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
-            if part and (rootPos - part.Position).Magnitude <= _antiTorretDetectionDistance then
-                return obj
+            if not (ownerId and tonumber(ownerId) == LocalPlayer.UserId) then
+                local part = obj:IsA("BasePart") and obj or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
+                if part and (rootPos - part.Position).Magnitude <= _antiTorretDetectionDistance then
+                    return obj
+                end
             end
         end
     end
@@ -1287,15 +1287,16 @@ task.spawn(function()
         if _espStealersEnabled then
             local robbing = _espStealersGetRobbing()
             for _, player in ipairs(Players:GetPlayers()) do
-                if player == LocalPlayer then continue end
-                local char = player.Character
-                if char then
-                    local hasESP = char:FindFirstChild("KYN_StealerHL")
-                    if robbing[player] then if not hasESP then _espStealersApply(char, player) end
-                    else
-                        if hasESP then hasESP:Destroy() end
-                        local root = char:FindFirstChild("HumanoidRootPart")
-                        if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+                if player ~= LocalPlayer then
+                    local char = player.Character
+                    if char then
+                        local hasESP = char:FindFirstChild("KYN_StealerHL")
+                        if robbing[player] then if not hasESP then _espStealersApply(char, player) end
+                        else
+                            if hasESP then hasESP:Destroy() end
+                            local root = char:FindFirstChild("HumanoidRootPart")
+                            if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+                        end
                     end
                 end
             end
