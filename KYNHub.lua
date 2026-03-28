@@ -134,11 +134,11 @@ toggleBtn.MouseLeave:Connect(function()
 end)
 
 -- ==========================================
--- // BOTÓN FLOTANTE RÁPIDO (AUTO CLONE)
+-- // BOTÓN FLOTANTE RÁPIDO (CLONE & TP)
 -- ==========================================
 local cloneDragFrame = Instance.new("Frame")
-cloneDragFrame.Size = UDim2.new(0, 60, 0, 60)
-cloneDragFrame.Position = UDim2.new(1, -80, 0.45, 0)
+cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
+cloneDragFrame.Position = UDim2.new(1, -74, 0.45, 0)
 cloneDragFrame.BackgroundTransparency = 1
 cloneDragFrame.Active = true
 cloneDragFrame.Draggable = true
