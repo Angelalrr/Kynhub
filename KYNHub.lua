@@ -1019,102 +1019,165 @@ local function _antiBeeDisable()
     _antiBeeDiscoConns = {}
 end
 
-local _desyncLoaded, _desyncPanel, _desyncTargetBtn, _desyncTargetIndicator, _desyncTargetTB = false, nil, nil, nil, nil
+local _desyncLoaded = false
+local _desyncGui, _desyncPanel = nil, nil
+local _desyncTargetBtn, _desyncTargetIndicator, _desyncTargetTB = nil, nil, nil
+local _desyncActionBtn, _desyncStatusLabel, _desyncStatusCircle = nil, nil, nil
+local _desyncActionDefaultColor = THEME.AccentDark
+
+local function _desyncUpdateStatusUI()
+    if not _desyncTargetIndicator or not _desyncStatusLabel or not _desyncStatusCircle then return end
+    local ok, currentColorHex = pcall(function()
+        return _desyncTargetIndicator.BackgroundColor3:ToHex():upper()
+    end)
+    if not ok then
+        _desyncStatusLabel.Text = "Estado: Desconocido"
+        _desyncStatusLabel.TextColor3 = THEME.TextLight
+        _desyncStatusCircle.BackgroundColor3 = THEME.ToggleOffTrack
+        return
+    end
+
+    if currentColorHex == "00FF78" then
+        _desyncStatusLabel.Text = "Estado: Activo"
+        _desyncStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
+        _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+    elseif currentColorHex == "28282D" then
+        _desyncStatusLabel.Text = "Estado: Desactivado"
+        _desyncStatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    else
+        _desyncStatusLabel.Text = "Estado: Desconocido"
+        _desyncStatusLabel.TextColor3 = THEME.TextLight
+        _desyncStatusCircle.BackgroundColor3 = _desyncTargetIndicator.BackgroundColor3
+    end
+end
+
+local function _desyncSimulateClick()
+    if not _desyncTargetBtn then return end
+    pcall(function()
+        if firesignal then
+            firesignal(_desyncTargetBtn.MouseButton1Down)
+            firesignal(_desyncTargetBtn.MouseButton1Up)
+            firesignal(_desyncTargetBtn.MouseButton1Click)
+            firesignal(_desyncTargetBtn.Activated)
+        elseif getconnections then
+            for _, c in pairs(getconnections(_desyncTargetBtn.MouseButton1Click)) do
+                if c.Function then c.Function() end
+            end
+        end
+    end)
+end
+
 local function _buildDesyncPanel()
-    if _desyncPanel then pcall(function() _desyncPanel:Destroy() end) end
+    if _desyncGui then pcall(function() _desyncGui:Destroy() end) end
+
+    _desyncGui = Instance.new("ScreenGui")
+    _desyncGui.Name = "KYN_DesyncGUI"
+    _desyncGui.ResetOnSpawn = false
+    _desyncGui.Parent = CoreGui
 
     _desyncPanel = Instance.new("Frame")
     _desyncPanel.Name = "KYN_DesyncPanel"
-    _desyncPanel.Size = UDim2.new(0, 220, 0, 135)
-    _desyncPanel.Position = UDim2.new(1, -230, 0.5, -68)
+    _desyncPanel.Size = UDim2.new(0, 220, 0, 165)
+    _desyncPanel.Position = UDim2.new(1, -230, 0.55, -82)
     _desyncPanel.BackgroundColor3 = THEME.FrameBg
     _desyncPanel.BorderSizePixel = 0
     _desyncPanel.Active = true
     _desyncPanel.Draggable = true
-    _desyncPanel.Parent = gui
+    _desyncPanel.Parent = _desyncGui
     Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
-    local dStroke = Instance.new("UIStroke", _desyncPanel)
-    dStroke.Color = THEME.Accent
-    dStroke.Thickness = 1.5
+    local panelStroke = Instance.new("UIStroke", _desyncPanel)
+    panelStroke.Color = THEME.Accent
+    panelStroke.Thickness = 1.4
 
-    local dTitle = Instance.new("TextLabel")
-    dTitle.Size = UDim2.new(1, 0, 0, 30)
-    dTitle.BackgroundTransparency = 1
-    dTitle.Text = "   ⚡ KYN Hub — Desync"
-    dTitle.Font = Enum.Font.GothamBold
-    dTitle.TextSize = 13
-    dTitle.TextXAlignment = Enum.TextXAlignment.Left
-    dTitle.TextColor3 = THEME.Accent
-    dTitle.Parent = _desyncPanel
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.BackgroundTransparency = 1
+    title.Text = "⚡ KYN Hub — Desync"
+    title.TextColor3 = THEME.TitleText
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 13
+    title.Parent = _desyncPanel
+
+    _desyncStatusCircle = Instance.new("Frame")
+    _desyncStatusCircle.Size = UDim2.new(0, 14, 0, 14)
+    _desyncStatusCircle.Position = UDim2.new(0.1, 0, 0, 33)
+    _desyncStatusCircle.BackgroundColor3 = THEME.ToggleOffTrack
+    _desyncStatusCircle.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncStatusCircle).CornerRadius = UDim.new(1, 0)
+
+    _desyncStatusLabel = Instance.new("TextLabel")
+    _desyncStatusLabel.Size = UDim2.new(0.8, -20, 0, 20)
+    _desyncStatusLabel.Position = UDim2.new(0.1, 20, 0, 30)
+    _desyncStatusLabel.BackgroundTransparency = 1
+    _desyncStatusLabel.Text = "Estado: Calculando..."
+    _desyncStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    _desyncStatusLabel.Font = Enum.Font.GothamMedium
+    _desyncStatusLabel.TextSize = 13
+    _desyncStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    _desyncStatusLabel.Parent = _desyncPanel
 
     local speedInput = Instance.new("TextBox")
-    speedInput.Size = UDim2.new(0.85, 0, 0, 32)
-    speedInput.Position = UDim2.new(0.075, 0, 0, 36)
+    speedInput.Size = UDim2.new(0.8, 0, 0, 30)
+    speedInput.Position = UDim2.new(0.1, 0, 0, 60)
     speedInput.BackgroundColor3 = THEME.FrameBg2
     speedInput.TextColor3 = THEME.TextLight
     speedInput.Font = Enum.Font.GothamMedium
-    speedInput.TextSize = 13
+    speedInput.TextSize = 14
     speedInput.PlaceholderText = "Velocidad..."
     speedInput.Parent = _desyncPanel
     Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 6)
 
-    local actionBtn = Instance.new("TextButton")
-    actionBtn.Size = UDim2.new(0.85, 0, 0, 38)
-    actionBtn.Position = UDim2.new(0.075, 0, 0, 82)
-    actionBtn.BackgroundColor3 = THEME.AccentDark
-    actionBtn.Text = "EJECUTAR DESYNC"
-    actionBtn.TextColor3 = THEME.TextLight
-    actionBtn.Font = Enum.Font.GothamBold
-    actionBtn.TextSize = 13
-    actionBtn.AutoButtonColor = false
-    actionBtn.Parent = _desyncPanel
-    Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 6)
+    _desyncActionBtn = Instance.new("TextButton")
+    _desyncActionBtn.Size = UDim2.new(0.8, 0, 0, 45)
+    _desyncActionBtn.Position = UDim2.new(0.1, 0, 0, 100)
+    _desyncActionBtn.BackgroundColor3 = _desyncActionDefaultColor
+    _desyncActionBtn.Text = "DESYNC"
+    _desyncActionBtn.TextColor3 = THEME.TextLight
+    _desyncActionBtn.Font = Enum.Font.GothamBold
+    _desyncActionBtn.TextSize = 15
+    _desyncActionBtn.AutoButtonColor = false
+    _desyncActionBtn.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncActionBtn).CornerRadius = UDim.new(0, 6)
 
-    if _desyncTargetTB then
-        pcall(function() speedInput.Text = _desyncTargetTB.Text or "" end)
-        speedInput:GetPropertyChangedSignal("Text"):Connect(function()
-            pcall(function()
-                if _desyncTargetTB then
-                    _desyncTargetTB.Text = speedInput.Text
-                    if firesignal then firesignal(_desyncTargetTB.FocusLost, true) end
-                end
-            end)
-        end)
+    if _desyncTargetTB and _desyncTargetTB.Text ~= "" then
+        pcall(function() speedInput.Text = _desyncTargetTB.Text end)
     end
-
-    actionBtn.MouseButton1Click:Connect(function()
-        if not _desyncTargetBtn then
-            actionBtn.Text = "Cargando..."; task.wait(0.5); actionBtn.Text = "EJECUTAR DESYNC"; return
-        end
-        local function simClick()
-            pcall(function()
-                if firesignal then
-                    firesignal(_desyncTargetBtn.MouseButton1Down)
-                    firesignal(_desyncTargetBtn.MouseButton1Up)
-                    firesignal(_desyncTargetBtn.MouseButton1Click)
-                    firesignal(_desyncTargetBtn.Activated)
-                elseif getconnections then
-                    for _, c in pairs(getconnections(_desyncTargetBtn.MouseButton1Click)) do if c.Function then c.Function() end end
-                end
-            end)
-        end
-        local ok, colorHex = pcall(function() return _desyncTargetIndicator.BackgroundColor3:ToHex():upper() end)
-        if ok then
-            if colorHex == "00FF78" then actionBtn.Text = "DOBLE CLIC!"; simClick(); task.wait(0.05); simClick()
-            elseif colorHex == "28282D" then actionBtn.Text = "UN CLIC!"; simClick()
-            else actionBtn.Text = "COLOR: "..colorHex; simClick() end
-        else actionBtn.Text = "EJECUTANDO..."; simClick() end
-        task.wait(0.4)
-        actionBtn.Text = "EJECUTAR DESYNC"
+    speedInput:GetPropertyChangedSignal("Text"):Connect(function()
+        pcall(function()
+            if _desyncTargetTB then
+                _desyncTargetTB.Text = speedInput.Text
+                if firesignal then firesignal(_desyncTargetTB.FocusLost, true) end
+            end
+        end)
     end)
+
+    _desyncActionBtn.MouseButton1Click:Connect(function()
+        if not _desyncTargetBtn then return end
+        _desyncActionBtn.BackgroundColor3 = THEME.Accent
+        _desyncSimulateClick()
+        task.wait(0.1)
+        if _desyncActionBtn then
+            _desyncActionBtn.BackgroundColor3 = _desyncActionDefaultColor
+        end
+    end)
+
+    if _desyncTargetIndicator then
+        _desyncTargetIndicator:GetPropertyChangedSignal("BackgroundColor3"):Connect(_desyncUpdateStatusUI)
+    end
+    _desyncUpdateStatusUI()
 end
 
 local function _loadDesync()
-    if _desyncLoaded then if _desyncPanel then _desyncPanel.Visible = true end return end
+    if _desyncLoaded then
+        if _desyncGui then _desyncGui.Enabled = true end
+        return
+    end
     _desyncLoaded = true
 
     task.spawn(function()
         local RobloxGui = CoreGui:WaitForChild("RobloxGui")
+
         local trampa
         trampa = RobloxGui.ChildAdded:Connect(function(child)
             if child.Name == "ChocolaDesync" then
@@ -1126,15 +1189,19 @@ local function _loadDesync()
                     end
                 end)
                 local existingFrame = child:FindFirstChild("Frame")
-                if existingFrame then existingFrame.Position = UDim2.new(9999, 0, 9999, 0); existingFrame.Visible = false end
+                if existingFrame then
+                    existingFrame.Position = UDim2.new(9999, 0, 9999, 0)
+                    existingFrame.Visible = false
+                end
             end
         end)
 
+        print("[KYN Hub] Cargando script de Chocola (GUI original oculta)...")
         local success = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/chocolascript-glitch/Chocola.script/refs/heads/main/Chocola-Desync-no-auto-grab.lua"))()
         end)
         if not success then
-            warn("[KYN Hub] No se pudo cargar el Desync externo.")
+            warn("[KYN Hub] La GUI de Chocola no cargó.")
             _desyncLoaded = false
             if trampa then trampa:Disconnect() end
             return
@@ -1142,23 +1209,36 @@ local function _loadDesync()
 
         local ChocolaDesync = RobloxGui:WaitForChild("ChocolaDesync", 10)
         if not ChocolaDesync then
-            warn("[KYN Hub] ChocolaDesync no apareció en el tiempo esperado.")
+            warn("[KYN Hub] La GUI de Chocola no cargó.")
             _desyncLoaded = false
             if trampa then trampa:Disconnect() end
             return
         end
-        if trampa then trampa:Disconnect() end
 
-        local desyncFrame = ChocolaDesync:WaitForChild("Frame", 5)
-        if not desyncFrame then return end
+        local mainFrame = ChocolaDesync:WaitForChild("Frame", 5)
+        if not mainFrame then
+            _desyncLoaded = false
+            if trampa then trampa:Disconnect() end
+            return
+        end
         task.wait(1)
-        pcall(function()
-            local seccion4 = desyncFrame:GetChildren()[4]
+
+        local ok = pcall(function()
+            local seccion4 = mainFrame:GetChildren()[4]
             _desyncTargetBtn = seccion4.TextButton
             _desyncTargetIndicator = _desyncTargetBtn.Frame
             _desyncTargetTB = seccion4.Frame.Frame.TextBox
         end)
+        if not ok then
+            warn("[KYN Hub] No se pudieron enlazar controles de Chocola.")
+            _desyncLoaded = false
+            if trampa then trampa:Disconnect() end
+            return
+        end
+
+        if trampa then trampa:Disconnect() end
         _buildDesyncPanel()
+        print("[KYN Hub] Controlador Desync listo.")
     end)
 end
 
@@ -1254,7 +1334,12 @@ _G.KYNAddToggle("Main", {
     Default = SETTINGS.AutoDesync,
     Callback = function(state)
         setSetting("AutoDesync", state)
-        if state then _loadDesync() else if _desyncPanel then _desyncPanel.Visible = false end end
+        if state then
+            _loadDesync()
+        else
+            if _desyncGui then _desyncGui.Enabled = false end
+            if _desyncPanel then _desyncPanel.Visible = false end
+        end
     end
 })
 _G.KYNAddButton("Main", {Name = "Clone & TP", Callback = function() _runAutoClone() end})
