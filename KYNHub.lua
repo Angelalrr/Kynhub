@@ -898,12 +898,47 @@ end
 _antiKnockbackController = setupAntiKnockback()
 
 local _freezeEnabled = false
+local _freezeAnimConns = {}
+
+local function _freezeDisconnectConns()
+    for _, c in ipairs(_freezeAnimConns) do
+        pcall(function() c:Disconnect() end)
+    end
+    _freezeAnimConns = {}
+end
+
+local function _freezeApplyToAnimator(animator, freezeState)
+    if not animator then return end
+    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+        pcall(function() track:AdjustSpeed(freezeState and 0 or 1) end)
+    end
+end
+
+local function _freezeBindAnimator(animator)
+    if not animator then return end
+    _freezeDisconnectConns()
+    _freezeApplyToAnimator(animator, _freezeEnabled)
+    table.insert(_freezeAnimConns, animator.AnimationPlayed:Connect(function(track)
+        if _freezeEnabled and track then
+            pcall(function() track:AdjustSpeed(0) end)
+        end
+    end))
+end
+
 local function _setFreezeAnims(state)
-    _freezeEnabled = state
-    local character = LocalPlayer.Character if not character then return end
-    local hum = character:FindFirstChildOfClass("Humanoid") if not hum then return end
-    local animator = hum:FindFirstChildOfClass("Animator") if not animator then return end
-    for _, track in pairs(animator:GetPlayingAnimationTracks()) do pcall(function() track:AdjustSpeed(state and 0 or 1) end) end
+    _freezeEnabled = state and true or false
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+    if not animator then return end
+
+    _freezeBindAnimator(animator)
+    _freezeApplyToAnimator(animator, _freezeEnabled)
+    if not _freezeEnabled then
+        _freezeDisconnectConns()
+    end
 end
 
 
@@ -1256,13 +1291,41 @@ local function _runAutoClone()
     clonerTool:Activate()
 
     task.delay(0.2, function()
-        local pg = LocalPlayer:FindFirstChild("PlayerGui") if not pg then return end
-        local tf = pg:FindFirstChild("ToolsFrames") if not tf then return end
-        local cloneUI = tf:FindFirstChild("QuantumCloner") if not cloneUI then return end
-        local tpButton = cloneUI:FindFirstChild("TeleportToClone") if not tpButton then return end
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if not pg then return end
+        local tf = pg:FindFirstChild("ToolsFrames")
+        if not tf then return end
+
+        local tpButton = nil
+        local timeout = tick() + 2
+        while tick() < timeout and not tpButton do
+            local cloneUI = tf:FindFirstChild("QuantumCloner")
+            if cloneUI then
+                tpButton = cloneUI:FindFirstChild("TeleportToClone", true)
+            end
+            if not tpButton then task.wait(0.05) end
+        end
+        if not tpButton then
+            warn("[KYN Hub] No se encontró botón TeleportToClone.")
+            return
+        end
+
         pcall(function()
             if tpButton:IsA("GuiButton") then
                 tpButton:Activate()
+                if firesignal then
+                    firesignal(tpButton.MouseButton1Down)
+                    firesignal(tpButton.MouseButton1Up)
+                    firesignal(tpButton.MouseButton1Click)
+                    firesignal(tpButton.Activated)
+                elseif getconnections then
+                    for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do
+                        if c.Function then c.Function() end
+                    end
+                    for _, c in pairs(getconnections(tpButton.MouseButton1Click)) do
+                        if c.Function then c.Function() end
+                    end
+                end
             end
         end)
     end)
