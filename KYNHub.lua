@@ -898,48 +898,128 @@ end
 _antiKnockbackController = setupAntiKnockback()
 
 local _freezeEnabled = false
-local _freezeAnimConns = {}
+local _freezeSavedAnims = {}
+local _freezeDescendantConn = nil
+local _freezeAnimPlayedConn = nil
 
 local function _freezeDisconnectConns()
-    for _, c in ipairs(_freezeAnimConns) do
-        pcall(function() c:Disconnect() end)
+    if _freezeDescendantConn then
+        pcall(function() _freezeDescendantConn:Disconnect() end)
+        _freezeDescendantConn = nil
     end
-    _freezeAnimConns = {}
-end
-
-local function _freezeApplyToAnimator(animator, freezeState)
-    if not animator then return end
-    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-        pcall(function() track:AdjustSpeed(freezeState and 0 or 1) end)
+    if _freezeAnimPlayedConn then
+        pcall(function() _freezeAnimPlayedConn:Disconnect() end)
+        _freezeAnimPlayedConn = nil
     end
 end
 
-local function _freezeBindAnimator(animator)
-    if not animator then return end
-    _freezeDisconnectConns()
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    table.insert(_freezeAnimConns, animator.AnimationPlayed:Connect(function(track)
-        if _freezeEnabled and track then
-            pcall(function() track:AdjustSpeed(0) end)
+local function _freezeIsWalkAnim(anim)
+    if not (anim and anim:IsA("Animation")) then return false end
+    local n = anim.Name:lower()
+    return n:find("walk") ~= nil or n:find("run") ~= nil
+end
+
+local function _freezeSaveAndClearAnimation(anim)
+    if not _freezeIsWalkAnim(anim) then return end
+    for _, v in ipairs(_freezeSavedAnims) do
+        if v.instance == anim then return end
+    end
+    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
+    anim.AnimationId = ""
+end
+
+local function _freezeRestoreAnimations()
+    for _, v in ipairs(_freezeSavedAnims) do
+        if v.instance and v.instance.Parent then
+            v.instance.AnimationId = v.id
         end
-    end))
+    end
+    _freezeSavedAnims = {}
+end
+
+local function _freezeStopWalkTracks(humanoid)
+    if not humanoid then return end
+    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+        local trackName = (track.Name or ""):lower()
+        if trackName:find("walk") or trackName:find("run") then
+            pcall(function() track:Stop(0) end)
+        end
+    end
+end
+
+local function _freezeScanCharacter(character)
+    if not character then return end
+    local animate = character:FindFirstChild("Animate")
+    if animate then
+        local walkFolder = animate:FindFirstChild("walk")
+        local runFolder = animate:FindFirstChild("run")
+        if walkFolder then
+            local walkAnim = walkFolder:FindFirstChild("WalkAnim")
+            if walkAnim then _freezeSaveAndClearAnimation(walkAnim) end
+        end
+        if runFolder then
+            local runAnim = runFolder:FindFirstChild("RunAnim")
+            if runAnim then _freezeSaveAndClearAnimation(runAnim) end
+        end
+        for _, desc in ipairs(animate:GetDescendants()) do
+            if desc:IsA("Animation") then
+                _freezeSaveAndClearAnimation(desc)
+            end
+        end
+    end
+
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if hum then
+        _freezeStopWalkTracks(hum)
+        local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+        if animator then
+            _freezeAnimPlayedConn = animator.AnimationPlayed:Connect(function(track)
+                if not _freezeEnabled or not track then return end
+                local trackName = (track.Name or ""):lower()
+                if trackName:find("walk") or trackName:find("run") then
+                    pcall(function() track:Stop(0) end)
+                end
+            end)
+        end
+    end
+end
+
+local function _freezeBindCharacter(character)
+    if not character then return end
+    _freezeDisconnectConns()
+    _freezeScanCharacter(character)
+    _freezeDescendantConn = character.DescendantAdded:Connect(function(desc)
+        if _freezeEnabled and desc:IsA("Animation") then
+            _freezeSaveAndClearAnimation(desc)
+        end
+    end)
 end
 
 local function _setFreezeAnims(state)
     _freezeEnabled = state and true or false
     local character = LocalPlayer.Character
-    if not character then return end
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
-    if not animator then return end
 
-    _freezeBindAnimator(animator)
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    if not _freezeEnabled then
+    if _freezeEnabled then
+        _freezeSavedAnims = {}
+        if character then
+            _freezeBindCharacter(character)
+        end
+    else
         _freezeDisconnectConns()
+        _freezeRestoreAnimations()
+        local hum = character and character:FindFirstChildOfClass("Humanoid")
+        _freezeStopWalkTracks(hum)
     end
 end
+
+local function _freezeCharacterAdded(character)
+    if _freezeEnabled then
+        task.wait(0.25)
+        _freezeBindCharacter(character)
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(_freezeCharacterAdded)
 
 
 -- Anti Torret
@@ -1377,7 +1457,6 @@ end)
 _espPlayerInit()
 LocalPlayer.CharacterAdded:Connect(function(char)
     _ijCharacter = char
-    if _freezeEnabled then task.wait(0.5); _setFreezeAnims(true) end
     if _arEnabled and _antiKnockbackController then task.wait(0.2); _antiKnockbackController.Enable() end
     if _antiTorretEnabled then _antiTorretStart() else _antiTorretStop() end
 end)
