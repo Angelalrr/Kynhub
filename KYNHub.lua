@@ -901,6 +901,9 @@ local _freezeEnabled = false
 local _freezeSavedAnims = {}
 local _freezeDescendantConn = nil
 local _freezeAnimPlayedConn = nil
+local _freezeHeartbeatConn = nil
+local _freezeTrackSpeeds = setmetatable({}, {__mode = "k"})
+local _freezeAnimateStates = setmetatable({}, {__mode = "k"})
 
 local function _freezeDisconnectConns()
     if _freezeDescendantConn then
@@ -910,6 +913,10 @@ local function _freezeDisconnectConns()
     if _freezeAnimPlayedConn then
         pcall(function() _freezeAnimPlayedConn:Disconnect() end)
         _freezeAnimPlayedConn = nil
+    end
+    if _freezeHeartbeatConn then
+        pcall(function() _freezeHeartbeatConn:Disconnect() end)
+        _freezeHeartbeatConn = nil
     end
 end
 
@@ -947,6 +954,49 @@ local function _freezeStopWalkTracks(humanoid)
     end
 end
 
+local function _freezeTrack(track, shouldFreeze)
+    if not track then return end
+    if shouldFreeze then
+        if _freezeTrackSpeeds[track] == nil then
+            local original = 1
+            pcall(function() original = track.Speed end)
+            _freezeTrackSpeeds[track] = original
+        end
+        pcall(function() track:AdjustSpeed(0) end)
+    else
+        local original = _freezeTrackSpeeds[track]
+        if original == nil then original = 1 end
+        pcall(function() track:AdjustSpeed(original) end)
+        _freezeTrackSpeeds[track] = nil
+    end
+end
+
+local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
+    if not animator then return end
+    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+        _freezeTrack(track, shouldFreeze)
+    end
+end
+
+local function _freezeSetAnimateDisabled(character, disabledState)
+    local animate = character and character:FindFirstChild("Animate")
+    if not (animate and animate:IsA("LocalScript")) then return end
+    if disabledState then
+        if _freezeAnimateStates[animate] == nil then
+            _freezeAnimateStates[animate] = animate.Disabled
+        end
+        animate.Disabled = true
+    else
+        local prev = _freezeAnimateStates[animate]
+        if prev ~= nil then
+            animate.Disabled = prev
+            _freezeAnimateStates[animate] = nil
+        else
+            animate.Disabled = false
+        end
+    end
+end
+
 local function _freezeScanCharacter(character)
     if not character then return end
     local animate = character:FindFirstChild("Animate")
@@ -973,11 +1023,16 @@ local function _freezeScanCharacter(character)
         _freezeStopWalkTracks(hum)
         local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
         if animator then
+            _freezeApplyAnimatorTracks(animator, true)
             _freezeAnimPlayedConn = animator.AnimationPlayed:Connect(function(track)
                 if not _freezeEnabled or not track then return end
+                _freezeTrack(track, true)
                 local trackName = (track.Name or ""):lower()
-                if trackName:find("walk") or trackName:find("run") then
-                    pcall(function() track:Stop(0) end)
+                if trackName:find("walk") or trackName:find("run") then pcall(function() track:Stop(0) end) end
+            end)
+            _freezeHeartbeatConn = RunService.Heartbeat:Connect(function()
+                if _freezeEnabled then
+                    _freezeApplyAnimatorTracks(animator, true)
                 end
             end)
         end
@@ -995,25 +1050,31 @@ local function _freezeBindCharacter(character)
     end)
 end
 
-local function _freezeGetAnimator()
+local function _setFreezeAnims(state)
+    _freezeEnabled = state and true or false
     local character = LocalPlayer.Character
 
     if _freezeEnabled then
         _freezeSavedAnims = {}
         if character then
+            _freezeSetAnimateDisabled(character, true)
             _freezeBindCharacter(character)
         end
     else
         _freezeDisconnectConns()
         _freezeRestoreAnimations()
+        if character then _freezeSetAnimateDisabled(character, false) end
         local hum = character and character:FindFirstChildOfClass("Humanoid")
         _freezeStopWalkTracks(hum)
+        local animator = hum and (hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 1))
+        if animator then _freezeApplyAnimatorTracks(animator, false) end
     end
 end
 
 local function _freezeCharacterAdded(character)
     if _freezeEnabled then
         task.wait(0.25)
+        _freezeSetAnimateDisabled(character, true)
         _freezeBindCharacter(character)
     end
 end
