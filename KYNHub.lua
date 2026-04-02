@@ -898,46 +898,77 @@ end
 _antiKnockbackController = setupAntiKnockback()
 
 local _freezeEnabled = false
-local _freezeAnimConns = {}
+local _freezeTrackSpeeds = setmetatable({}, {__mode = "k"})
+local _freezeAnimatorConns = {}
 
-local function _freezeDisconnectConns()
-    for _, c in ipairs(_freezeAnimConns) do
+local function _freezeDisconnectAnimatorConns()
+    for _, c in ipairs(_freezeAnimatorConns) do
         pcall(function() c:Disconnect() end)
     end
-    _freezeAnimConns = {}
+    _freezeAnimatorConns = {}
+end
+
+local function _freezeStoreTrackSpeed(track)
+    if not track or _freezeTrackSpeeds[track] ~= nil then return end
+    local speed = 1
+    pcall(function() speed = track.Speed end)
+    _freezeTrackSpeeds[track] = speed
+end
+
+local function _freezeTrack(track, freezeState)
+    if not track then return end
+    if freezeState then
+        _freezeStoreTrackSpeed(track)
+        pcall(function() track:AdjustSpeed(0) end)
+    else
+        local originalSpeed = _freezeTrackSpeeds[track]
+        if originalSpeed == nil then originalSpeed = 1 end
+        pcall(function() track:AdjustSpeed(originalSpeed) end)
+        _freezeTrackSpeeds[track] = nil
+    end
 end
 
 local function _freezeApplyToAnimator(animator, freezeState)
     if not animator then return end
     for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-        pcall(function() track:AdjustSpeed(freezeState and 0 or 1) end)
+        _freezeTrack(track, freezeState)
     end
 end
 
 local function _freezeBindAnimator(animator)
     if not animator then return end
-    _freezeDisconnectConns()
+    _freezeDisconnectAnimatorConns()
     _freezeApplyToAnimator(animator, _freezeEnabled)
-    table.insert(_freezeAnimConns, animator.AnimationPlayed:Connect(function(track)
+    table.insert(_freezeAnimatorConns, animator.AnimationPlayed:Connect(function(track)
         if _freezeEnabled and track then
-            pcall(function() track:AdjustSpeed(0) end)
+            _freezeTrack(track, true)
         end
     end))
 end
 
+local function _freezeGetAnimator()
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    return hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+end
+
 local function _setFreezeAnims(state)
     _freezeEnabled = state and true or false
-    local character = LocalPlayer.Character
-    if not character then return end
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
-    if not animator then return end
+    local animator = _freezeGetAnimator()
+    if not animator then
+        if not _freezeEnabled then
+            _freezeDisconnectAnimatorConns()
+        end
+        return
+    end
 
-    _freezeBindAnimator(animator)
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    if not _freezeEnabled then
-        _freezeDisconnectConns()
+    if _freezeEnabled then
+        _freezeBindAnimator(animator)
+    else
+        _freezeApplyToAnimator(animator, false)
+        _freezeDisconnectAnimatorConns()
     end
 end
 
