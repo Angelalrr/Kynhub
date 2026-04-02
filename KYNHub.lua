@@ -38,6 +38,7 @@ local LocalPlayer = Players.LocalPlayer
 local CONFIG_FILE = "KYNHub_Settings.json"
 local SETTINGS = {
     AutoDesync = false,
+    AutoDesyncAutoActivate = false,
     ESPJugadores = false,
     ESPBaseTime = false,
     ESPLadrones = false,
@@ -48,6 +49,7 @@ local SETTINGS = {
     FreezeAnimaciones = false,
     AntiTorret = false,
     AntiBeeDisco = false,
+    ShowAutoCloneButton = true,
 }
 
 local function saveSettings()
@@ -144,6 +146,7 @@ cloneDragFrame.BackgroundTransparency = 1
 cloneDragFrame.Active = true
 cloneDragFrame.Draggable = true
 cloneDragFrame.Parent = gui
+cloneDragFrame.Visible = SETTINGS.ShowAutoCloneButton
 
 local cloneQuickBtn = Instance.new("TextButton")
 cloneQuickBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -159,6 +162,34 @@ Instance.new("UICorner", cloneQuickBtn).CornerRadius = UDim.new(1, 0)
 local cloneQuickStroke = Instance.new("UIStroke", cloneQuickBtn)
 cloneQuickStroke.Color = THEME.Accent
 cloneQuickStroke.Thickness = 1.4
+
+do
+    local dragging = false
+    local dragInput, dragStart, startPos
+    cloneQuickBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = cloneDragFrame.Position
+            dragInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and dragInput and input == dragInput then
+            local delta = input.Position - dragStart
+            cloneDragFrame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
 
 -- ==========================================
 -- // MAIN GUI FRAME
@@ -1197,11 +1228,15 @@ end
 local _desyncLoaded = false
 local _desyncGui, _desyncPanel = nil, nil
 local _desyncToggleButton = nil
+local _desyncAutoToggleButton = nil
+local _desyncStatusLabel = nil
+local _desyncStatusCircle = nil
 local _desyncCloneWatchConn = nil
 local _desyncRubberbandLoop = nil
 local _desyncServerGhost = nil
 local _desyncWorldAddedConn = nil
 local _desyncIsActive = false
+local _desyncAutoActivate = SETTINGS.AutoDesyncAutoActivate and true or false
 local _desyncLastPlayerPos = nil
 local _desyncLagbackWarningEndTime = 0
 local _desyncIgnoringTeleport = false
@@ -1223,6 +1258,20 @@ local function _desyncSetButtonUI()
     else
         _desyncToggleButton.Text = "DESYNC: DESACTIVADO"
         _desyncToggleButton.BackgroundColor3 = THEME.FrameBg2
+    end
+end
+
+local function _desyncUpdateStatusUI()
+    if _desyncStatusLabel then
+        _desyncStatusLabel.Text = _desyncIsActive and "Activador: Activado" or "Activador: Desactivado"
+        _desyncStatusLabel.TextColor3 = _desyncIsActive and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(180, 180, 180)
+    end
+    if _desyncStatusCircle then
+        _desyncStatusCircle.BackgroundColor3 = _desyncIsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
+    end
+    if _desyncAutoToggleButton then
+        _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
+        _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
     end
 end
 
@@ -1399,6 +1448,7 @@ local function _desyncActivate()
     if not char then return end
     _desyncIsActive = true
     _desyncSetButtonUI()
+    _desyncUpdateStatusUI()
     _desyncCreateServerGhost(char)
     pcall(function() raknet.desync(true) end)
     _desyncLastPlayerPos = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position or nil
@@ -1419,6 +1469,7 @@ end
 local function _desyncDeactivate()
     _desyncIsActive = false
     _desyncSetButtonUI()
+    _desyncUpdateStatusUI()
     pcall(function() raknet.desync(false) end)
     if _desyncRubberbandLoop then _desyncRubberbandLoop:Disconnect() _desyncRubberbandLoop = nil end
     if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
@@ -1437,8 +1488,8 @@ local function _buildDesyncPanel()
 
     _desyncPanel = Instance.new("Frame")
     _desyncPanel.Name = "KYN_DesyncPanel"
-    _desyncPanel.Size = UDim2.new(0, 250, 0, 70)
-    _desyncPanel.Position = UDim2.new(1, -265, 0.55, -35)
+    _desyncPanel.Size = UDim2.new(0, 250, 0, 170)
+    _desyncPanel.Position = UDim2.new(1, -265, 0.55, -85)
     _desyncPanel.BackgroundColor3 = THEME.FrameBg
     _desyncPanel.BorderSizePixel = 0
     _desyncPanel.Active = true
@@ -1449,9 +1500,50 @@ local function _buildDesyncPanel()
     panelStroke.Color = THEME.Accent
     panelStroke.Thickness = 1.4
 
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 0, 25)
+    title.Position = UDim2.new(0, 10, 0, 6)
+    title.BackgroundTransparency = 1
+    title.Text = "⚡ KYN Desync"
+    title.TextColor3 = THEME.TitleText
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 15
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = _desyncPanel
+
+    _desyncStatusCircle = Instance.new("Frame")
+    _desyncStatusCircle.Size = UDim2.new(0, 12, 0, 12)
+    _desyncStatusCircle.Position = UDim2.new(0, 12, 0, 38)
+    _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(90, 90, 95)
+    _desyncStatusCircle.BorderSizePixel = 0
+    _desyncStatusCircle.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncStatusCircle).CornerRadius = UDim.new(1, 0)
+
+    _desyncStatusLabel = Instance.new("TextLabel")
+    _desyncStatusLabel.Size = UDim2.new(1, -32, 0, 18)
+    _desyncStatusLabel.Position = UDim2.new(0, 30, 0, 35)
+    _desyncStatusLabel.BackgroundTransparency = 1
+    _desyncStatusLabel.Text = "Activador: Desactivado"
+    _desyncStatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    _desyncStatusLabel.Font = Enum.Font.GothamMedium
+    _desyncStatusLabel.TextSize = 13
+    _desyncStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    _desyncStatusLabel.Parent = _desyncPanel
+
+    _desyncAutoToggleButton = Instance.new("TextButton")
+    _desyncAutoToggleButton.Size = UDim2.new(1, -20, 0, 32)
+    _desyncAutoToggleButton.Position = UDim2.new(0, 10, 0, 58)
+    _desyncAutoToggleButton.BackgroundColor3 = THEME.FrameBg2
+    _desyncAutoToggleButton.TextColor3 = THEME.TextLight
+    _desyncAutoToggleButton.Font = Enum.Font.GothamBold
+    _desyncAutoToggleButton.TextSize = 13
+    _desyncAutoToggleButton.AutoButtonColor = true
+    _desyncAutoToggleButton.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncAutoToggleButton).CornerRadius = UDim.new(0, 8)
+
     _desyncToggleButton = Instance.new("TextButton")
     _desyncToggleButton.Size = UDim2.new(1, -20, 0, 45)
-    _desyncToggleButton.Position = UDim2.new(0, 10, 0, 12)
+    _desyncToggleButton.Position = UDim2.new(0, 10, 0, 98)
     _desyncToggleButton.BackgroundColor3 = THEME.FrameBg2
     _desyncToggleButton.TextColor3 = Color3.new(1, 1, 1)
     _desyncToggleButton.Font = Enum.Font.GothamBold
@@ -1463,7 +1555,16 @@ local function _buildDesyncPanel()
     _desyncToggleButton.MouseButton1Click:Connect(function()
         if _desyncIsActive then _desyncDeactivate() else _desyncActivate() end
     end)
+    _desyncAutoToggleButton.MouseButton1Click:Connect(function()
+        _desyncAutoActivate = not _desyncAutoActivate
+        setSetting("AutoDesyncAutoActivate", _desyncAutoActivate)
+        _desyncUpdateStatusUI()
+        if _desyncAutoActivate and not _desyncIsActive then
+            _desyncActivate()
+        end
+    end)
     _desyncSetButtonUI()
+    _desyncUpdateStatusUI()
 end
 
 local function _loadDesync()
@@ -1473,6 +1574,12 @@ local function _loadDesync()
     end
     _desyncLoaded = true
     _buildDesyncPanel()
+    if _desyncAutoActivate and not _desyncIsActive then
+        task.spawn(function()
+            task.wait(0.2)
+            _desyncActivate()
+        end)
+    end
     if not _desyncWorldAddedConn then
         _desyncWorldAddedConn = Workspace.ChildAdded:Connect(function(child)
             if _desyncIsActive and child.Name == _desyncCloneName and child:IsA("Model") then
@@ -1605,7 +1712,14 @@ _G.KYNAddToggle("Main", {
         end
     end
 })
-_G.KYNAddButton("Main", {Name = "Clone & TP", Callback = function() _runAutoClone() end})
+_G.KYNAddToggle("Main", {
+    Name = "Mostrar botón Auto Clone",
+    Default = SETTINGS.ShowAutoCloneButton,
+    Callback = function(state)
+        setSetting("ShowAutoCloneButton", state)
+        cloneDragFrame.Visible = state
+    end
+})
 
 _G.KYNAddToggle("Visual", {
     Name = "ESP Jugadores",
