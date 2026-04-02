@@ -56,6 +56,8 @@ local SETTINGS = {
     AntiTorret = false,
     AntiBeeDisco = false,
     ShowAutoCloneButton = true,
+    StealSpeedValue = 25,
+    GuiPositions = {},
 }
 
 local function saveSettings()
@@ -73,8 +75,14 @@ local function loadSettings()
             local decoded = HttpService:JSONDecode(raw)
             if type(decoded) == "table" then
                 for k, v in pairs(decoded) do
-                    if SETTINGS[k] ~= nil and type(v) == "boolean" then
-                        SETTINGS[k] = v
+                    if SETTINGS[k] ~= nil then
+                        if type(SETTINGS[k]) == "boolean" and type(v) == "boolean" then
+                            SETTINGS[k] = v
+                        elseif type(SETTINGS[k]) == "number" and type(v) == "number" then
+                            SETTINGS[k] = v
+                        elseif type(SETTINGS[k]) == "table" and type(v) == "table" then
+                            SETTINGS[k] = v
+                        end
                     end
                 end
             end
@@ -87,6 +95,47 @@ local function setSetting(key, value)
         SETTINGS[key] = value and true or false
         saveSettings()
     end
+end
+
+local function setRawSetting(key, value)
+    if SETTINGS[key] ~= nil then
+        SETTINGS[key] = value
+        saveSettings()
+    end
+end
+
+local function _encodeUDim2(pos)
+    return {
+        xs = pos.X.Scale, xo = pos.X.Offset,
+        ys = pos.Y.Scale, yo = pos.Y.Offset
+    }
+end
+
+local function _decodeUDim2(data, fallback)
+    if type(data) ~= "table" then return fallback end
+    if type(data.xs) ~= "number" or type(data.xo) ~= "number" or type(data.ys) ~= "number" or type(data.yo) ~= "number" then
+        return fallback
+    end
+    return UDim2.new(data.xs, data.xo, data.ys, data.yo)
+end
+
+local function _saveGuiPos(key, frame)
+    if not (key and frame) then return end
+    SETTINGS.GuiPositions = SETTINGS.GuiPositions or {}
+    SETTINGS.GuiPositions[key] = _encodeUDim2(frame.Position)
+    saveSettings()
+end
+
+local function _loadGuiPos(key, fallback)
+    local map = SETTINGS.GuiPositions
+    return _decodeUDim2(type(map) == "table" and map[key] or nil, fallback)
+end
+
+local function _bindGuiPosPersistence(key, frame)
+    if not frame then return end
+    frame:GetPropertyChangedSignal("Position"):Connect(function()
+        _saveGuiPos(key, frame)
+    end)
 end
 
 loadSettings()
@@ -106,11 +155,12 @@ gui.Parent = CoreGui
 -- ==========================================
 local btnDragFrame = Instance.new("Frame")
 btnDragFrame.Size = UDim2.new(0, 55, 0, 55)
-btnDragFrame.Position = UDim2.new(0, 20, 0.2, 0)
+btnDragFrame.Position = _loadGuiPos("OpenButton", UDim2.new(0, 20, 0.2, 0))
 btnDragFrame.BackgroundTransparency = 1
 btnDragFrame.Active = true
 btnDragFrame.Draggable = true
 btnDragFrame.Parent = gui
+_bindGuiPosPersistence("OpenButton", btnDragFrame)
 
 local toggleBtn = Instance.new("ImageButton")
 toggleBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -147,12 +197,13 @@ end)
 -- ==========================================
 local cloneDragFrame = Instance.new("Frame")
 cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
-cloneDragFrame.Position = UDim2.new(1, -74, 0.45, 0)
+cloneDragFrame.Position = _loadGuiPos("CloneButton", UDim2.new(1, -74, 0.45, 0))
 cloneDragFrame.BackgroundTransparency = 1
 cloneDragFrame.Active = true
 cloneDragFrame.Draggable = true
 cloneDragFrame.Parent = gui
 cloneDragFrame.Visible = SETTINGS.ShowAutoCloneButton
+_bindGuiPosPersistence("CloneButton", cloneDragFrame)
 
 local cloneQuickBtn = Instance.new("TextButton")
 cloneQuickBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -202,12 +253,13 @@ end
 -- ==========================================
 local mainDragFrame = Instance.new("Frame")
 mainDragFrame.Size = UDim2.new(0, 270, 0, 300)
-mainDragFrame.Position = UDim2.new(0.5, -135, 0.5, -150)
+mainDragFrame.Position = _loadGuiPos("MainPanel", UDim2.new(0.5, -135, 0.5, -150))
 mainDragFrame.BackgroundTransparency = 1
 mainDragFrame.Active = true
 mainDragFrame.Draggable = true
 mainDragFrame.Visible = false
 mainDragFrame.Parent = gui
+_bindGuiPosPersistence("MainPanel", mainDragFrame)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -1274,11 +1326,19 @@ local _desyncServerGhost = nil
 local _desyncWorldAddedConn = nil
 local _desyncIsActive = false
 local _desyncAutoActivate = SETTINGS.AutoDesyncAutoActivate and true or false
+local _desyncStealEnabled = true
+local _desyncStealSpeed = math.clamp(tonumber(SETTINGS.StealSpeedValue) or 25, 5, 100)
+local _desyncStealMin, _desyncStealMax = 5, 100
+local _desyncStealConn = nil
 local _desyncLastPlayerPos = nil
 local _desyncLagbackWarningEndTime = 0
 local _desyncIgnoringTeleport = false
 local _desyncToolName = "Quantum Cloner"
 local _desyncCloneName = tostring(LocalPlayer.UserId) .. "_Clone"
+local _desyncStealSpeedLabel = nil
+local _desyncStealSliderBg = nil
+local _desyncStealSliderFill = nil
+local _desyncStealSliderKnob = nil
 
 local _desyncHighlight = Instance.new("Highlight")
 _desyncHighlight.Name = "KYN_RubberbandHighlight"
@@ -1310,6 +1370,37 @@ local function _desyncUpdateStatusUI()
         _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
         _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
     end
+end
+
+local function _desyncUpdateStealUI()
+    if _desyncStealSpeedLabel then
+        _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
+    end
+    local percent = (_desyncStealSpeed - _desyncStealMin) / (_desyncStealMax - _desyncStealMin)
+    if _desyncStealSliderFill then _desyncStealSliderFill.Size = UDim2.new(percent, 0, 1, 0) end
+    if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
+end
+
+local function _desyncEnsureStealLoop()
+    if _desyncStealConn then return end
+    _desyncStealConn = RunService.Heartbeat:Connect(function()
+        if not _desyncStealEnabled then return end
+        if LocalPlayer:GetAttribute("Stealing") ~= true then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hum and hrp and hum.Health > 0 then
+            local md = hum.MoveDirection
+            if md.Magnitude > 0 then
+                hrp.AssemblyLinearVelocity = Vector3.new(
+                    md.X * _desyncStealSpeed,
+                    hrp.AssemblyLinearVelocity.Y,
+                    md.Z * _desyncStealSpeed
+                )
+            end
+        end
+    end)
 end
 
 local function _desyncCreateServerGhost(character)
@@ -1525,13 +1616,14 @@ local function _buildDesyncPanel()
 
     _desyncPanel = Instance.new("Frame")
     _desyncPanel.Name = "KYN_DesyncPanel"
-    _desyncPanel.Size = UDim2.new(0, 250, 0, 170)
-    _desyncPanel.Position = UDim2.new(1, -265, 0.55, -85)
+    _desyncPanel.Size = UDim2.new(0, 250, 0, 250)
+    _desyncPanel.Position = _loadGuiPos("DesyncPanel", UDim2.new(1, -265, 0.55, -125))
     _desyncPanel.BackgroundColor3 = THEME.FrameBg
     _desyncPanel.BorderSizePixel = 0
     _desyncPanel.Active = true
     _desyncPanel.Draggable = true
     _desyncPanel.Parent = _desyncGui
+    _bindGuiPosPersistence("DesyncPanel", _desyncPanel)
     Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
     local panelStroke = Instance.new("UIStroke", _desyncPanel)
     panelStroke.Color = THEME.Accent
@@ -1589,6 +1681,40 @@ local function _buildDesyncPanel()
     _desyncToggleButton.Parent = _desyncPanel
     Instance.new("UICorner", _desyncToggleButton).CornerRadius = UDim.new(0, 8)
 
+    _desyncStealSpeedLabel = Instance.new("TextLabel")
+    _desyncStealSpeedLabel.Size = UDim2.new(1, -20, 0, 20)
+    _desyncStealSpeedLabel.Position = UDim2.new(0, 10, 0, 152)
+    _desyncStealSpeedLabel.BackgroundTransparency = 1
+    _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
+    _desyncStealSpeedLabel.TextColor3 = THEME.TextLight
+    _desyncStealSpeedLabel.Font = Enum.Font.GothamBold
+    _desyncStealSpeedLabel.TextSize = 13
+    _desyncStealSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    _desyncStealSpeedLabel.Parent = _desyncPanel
+
+    _desyncStealSliderBg = Instance.new("Frame")
+    _desyncStealSliderBg.Size = UDim2.new(1, -20, 0, 6)
+    _desyncStealSliderBg.Position = UDim2.new(0, 10, 0, 178)
+    _desyncStealSliderBg.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
+    _desyncStealSliderBg.BorderSizePixel = 0
+    _desyncStealSliderBg.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncStealSliderBg).CornerRadius = UDim.new(1, 0)
+
+    _desyncStealSliderFill = Instance.new("Frame")
+    _desyncStealSliderFill.Size = UDim2.new(0, 0, 1, 0)
+    _desyncStealSliderFill.BackgroundColor3 = THEME.Accent
+    _desyncStealSliderFill.BorderSizePixel = 0
+    _desyncStealSliderFill.Parent = _desyncStealSliderBg
+    Instance.new("UICorner", _desyncStealSliderFill).CornerRadius = UDim.new(1, 0)
+
+    _desyncStealSliderKnob = Instance.new("Frame")
+    _desyncStealSliderKnob.Size = UDim2.new(0, 14, 0, 14)
+    _desyncStealSliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    _desyncStealSliderKnob.Position = UDim2.new(0, 0, 0.5, 0)
+    _desyncStealSliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _desyncStealSliderKnob.Parent = _desyncStealSliderBg
+    Instance.new("UICorner", _desyncStealSliderKnob).CornerRadius = UDim.new(1, 0)
+
     _desyncToggleButton.MouseButton1Click:Connect(function()
         if _desyncIsActive then _desyncDeactivate() else _desyncActivate() end
     end)
@@ -1600,8 +1726,36 @@ local function _buildDesyncPanel()
             _desyncActivate()
         end
     end)
+    do
+        local sliderDragging = false
+        local function updateSlider(input)
+            if not _desyncStealSliderBg then return end
+            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, _desyncStealSliderBg.AbsoluteSize.X)
+            local percent = pos / _desyncStealSliderBg.AbsoluteSize.X
+            _desyncStealSpeed = math.floor(_desyncStealMin + (percent * (_desyncStealMax - _desyncStealMin)))
+            setRawSetting("StealSpeedValue", _desyncStealSpeed)
+            _desyncUpdateStealUI()
+        end
+        _desyncStealSliderBg.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliderDragging = true
+                updateSlider(input)
+            end
+        end)
+        UIS.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliderDragging = false
+            end
+        end)
+        UIS.InputChanged:Connect(function(input)
+            if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                updateSlider(input)
+            end
+        end)
+    end
     _desyncSetButtonUI()
     _desyncUpdateStatusUI()
+    _desyncUpdateStealUI()
 end
 
 local function _loadDesync()
@@ -1611,6 +1765,7 @@ local function _loadDesync()
     end
     _desyncLoaded = true
     _buildDesyncPanel()
+    _desyncEnsureStealLoop()
     if _desyncAutoActivate and not _desyncIsActive then
         task.spawn(function()
             task.wait(0.2)
