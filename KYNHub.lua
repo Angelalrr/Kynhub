@@ -995,8 +995,7 @@ local function _freezeBindCharacter(character)
     end)
 end
 
-local function _setFreezeAnims(state)
-    _freezeEnabled = state and true or false
+local function _freezeGetAnimator()
     local character = LocalPlayer.Character
 
     if _freezeEnabled then
