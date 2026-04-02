@@ -898,48 +898,188 @@ end
 _antiKnockbackController = setupAntiKnockback()
 
 local _freezeEnabled = false
-local _freezeAnimConns = {}
+local _freezeSavedAnims = {}
+local _freezeDescendantConn = nil
+local _freezeAnimPlayedConn = nil
+local _freezeHeartbeatConn = nil
+local _freezeTrackSpeeds = setmetatable({}, {__mode = "k"})
+local _freezeAnimateStates = setmetatable({}, {__mode = "k"})
 
 local function _freezeDisconnectConns()
-    for _, c in ipairs(_freezeAnimConns) do
-        pcall(function() c:Disconnect() end)
+    if _freezeDescendantConn then
+        pcall(function() _freezeDescendantConn:Disconnect() end)
+        _freezeDescendantConn = nil
     end
-    _freezeAnimConns = {}
+    if _freezeAnimPlayedConn then
+        pcall(function() _freezeAnimPlayedConn:Disconnect() end)
+        _freezeAnimPlayedConn = nil
+    end
+    if _freezeHeartbeatConn then
+        pcall(function() _freezeHeartbeatConn:Disconnect() end)
+        _freezeHeartbeatConn = nil
+    end
 end
 
-local function _freezeApplyToAnimator(animator, freezeState)
-    if not animator then return end
-    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-        pcall(function() track:AdjustSpeed(freezeState and 0 or 1) end)
-    end
+local function _freezeIsWalkAnim(anim)
+    if not (anim and anim:IsA("Animation")) then return false end
+    local n = anim.Name:lower()
+    return n:find("walk") ~= nil or n:find("run") ~= nil
 end
 
-local function _freezeBindAnimator(animator)
-    if not animator then return end
-    _freezeDisconnectConns()
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    table.insert(_freezeAnimConns, animator.AnimationPlayed:Connect(function(track)
-        if _freezeEnabled and track then
-            pcall(function() track:AdjustSpeed(0) end)
+local function _freezeSaveAndClearAnimation(anim)
+    if not _freezeIsWalkAnim(anim) then return end
+    for _, v in ipairs(_freezeSavedAnims) do
+        if v.instance == anim then return end
+    end
+    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
+    anim.AnimationId = ""
+end
+
+local function _freezeRestoreAnimations()
+    for _, v in ipairs(_freezeSavedAnims) do
+        if v.instance and v.instance.Parent then
+            v.instance.AnimationId = v.id
         end
-    end))
+    end
+    _freezeSavedAnims = {}
+end
+
+local function _freezeStopWalkTracks(humanoid)
+    if not humanoid then return end
+    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+        local trackName = (track.Name or ""):lower()
+        if trackName:find("walk") or trackName:find("run") then
+            pcall(function() track:Stop(0) end)
+        end
+    end
+end
+
+local function _freezeTrack(track, shouldFreeze)
+    if not track then return end
+    if shouldFreeze then
+        if _freezeTrackSpeeds[track] == nil then
+            local original = 1
+            pcall(function() original = track.Speed end)
+            _freezeTrackSpeeds[track] = original
+        end
+        pcall(function() track:AdjustSpeed(0) end)
+    else
+        local original = _freezeTrackSpeeds[track]
+        if original == nil then original = 1 end
+        pcall(function() track:AdjustSpeed(original) end)
+        _freezeTrackSpeeds[track] = nil
+    end
+end
+
+local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
+    if not animator then return end
+    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+        _freezeTrack(track, shouldFreeze)
+    end
+end
+
+local function _freezeSetAnimateDisabled(character, disabledState)
+    local animate = character and character:FindFirstChild("Animate")
+    if not (animate and animate:IsA("LocalScript")) then return end
+    if disabledState then
+        if _freezeAnimateStates[animate] == nil then
+            _freezeAnimateStates[animate] = animate.Disabled
+        end
+        animate.Disabled = true
+    else
+        local prev = _freezeAnimateStates[animate]
+        if prev ~= nil then
+            animate.Disabled = prev
+            _freezeAnimateStates[animate] = nil
+        else
+            animate.Disabled = false
+        end
+    end
+end
+
+local function _freezeScanCharacter(character)
+    if not character then return end
+    local animate = character:FindFirstChild("Animate")
+    if animate then
+        local walkFolder = animate:FindFirstChild("walk")
+        local runFolder = animate:FindFirstChild("run")
+        if walkFolder then
+            local walkAnim = walkFolder:FindFirstChild("WalkAnim")
+            if walkAnim then _freezeSaveAndClearAnimation(walkAnim) end
+        end
+        if runFolder then
+            local runAnim = runFolder:FindFirstChild("RunAnim")
+            if runAnim then _freezeSaveAndClearAnimation(runAnim) end
+        end
+        for _, desc in ipairs(animate:GetDescendants()) do
+            if desc:IsA("Animation") then
+                _freezeSaveAndClearAnimation(desc)
+            end
+        end
+    end
+
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if hum then
+        _freezeStopWalkTracks(hum)
+        local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+        if animator then
+            _freezeApplyAnimatorTracks(animator, true)
+            _freezeAnimPlayedConn = animator.AnimationPlayed:Connect(function(track)
+                if not _freezeEnabled or not track then return end
+                _freezeTrack(track, true)
+                local trackName = (track.Name or ""):lower()
+                if trackName:find("walk") or trackName:find("run") then pcall(function() track:Stop(0) end) end
+            end)
+            _freezeHeartbeatConn = RunService.Heartbeat:Connect(function()
+                if _freezeEnabled then
+                    _freezeApplyAnimatorTracks(animator, true)
+                end
+            end)
+        end
+    end
+end
+
+local function _freezeBindCharacter(character)
+    if not character then return end
+    _freezeDisconnectConns()
+    _freezeScanCharacter(character)
+    _freezeDescendantConn = character.DescendantAdded:Connect(function(desc)
+        if _freezeEnabled and desc:IsA("Animation") then
+            _freezeSaveAndClearAnimation(desc)
+        end
+    end)
 end
 
 local function _setFreezeAnims(state)
     _freezeEnabled = state and true or false
     local character = LocalPlayer.Character
-    if not character then return end
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
-    if not animator then return end
 
-    _freezeBindAnimator(animator)
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    if not _freezeEnabled then
+    if _freezeEnabled then
+        _freezeSavedAnims = {}
+        if character then
+            _freezeSetAnimateDisabled(character, true)
+            _freezeBindCharacter(character)
+        end
+    else
         _freezeDisconnectConns()
+        _freezeRestoreAnimations()
+        if character then _freezeSetAnimateDisabled(character, false) end
+        local hum = character and character:FindFirstChildOfClass("Humanoid")
+        _freezeStopWalkTracks(hum)
+        local animator = hum and (hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 1))
+        if animator then _freezeApplyAnimatorTracks(animator, false) end
     end
 end
+
+local function _freezeCharacterAdded(character)
+    if _freezeEnabled then
+        task.wait(0.25)
+        _freezeSetAnimateDisabled(character, true)
+        _freezeBindCharacter(character)
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(_freezeCharacterAdded)
 
 
 -- Anti Torret
@@ -1377,7 +1517,6 @@ end)
 _espPlayerInit()
 LocalPlayer.CharacterAdded:Connect(function(char)
     _ijCharacter = char
-    if _freezeEnabled then task.wait(0.5); _setFreezeAnims(true) end
     if _arEnabled and _antiKnockbackController then task.wait(0.2); _antiKnockbackController.Enable() end
     if _antiTorretEnabled then _antiTorretStart() else _antiTorretStop() end
 end)
