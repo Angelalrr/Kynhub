@@ -33,6 +33,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
+local ALLOWED_PLACE_ID = 109983668079237
+
+if game.PlaceId ~= ALLOWED_PLACE_ID then
+    warn("[KYN Hub] Script bloqueado: solo funciona en PlaceId " .. tostring(ALLOWED_PLACE_ID))
+    return
+end
 
 --// ======= SETTINGS PERSISTENTES =======
 local CONFIG_FILE = "KYNHub_Settings.json"
@@ -797,6 +803,17 @@ local function setupAntiKnockback()
         return knockoutStates[state]
     end
 
+    local function hardenHumanoid(humanoid)
+        if not humanoid then return end
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        end)
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+    end
+
     local function enableControls(player)
         pcall(function()
             local playerScripts = player:WaitForChild("PlayerScripts")
@@ -848,6 +865,7 @@ local function setupAntiKnockback()
 
         table.insert(connections, humanoid.StateChanged:Connect(function(_, newState)
             if shouldApplyAntiKnockback(humanoid) then
+                hardenHumanoid(humanoid)
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait()
                 humanoid:ChangeState(Enum.HumanoidStateType.Running)
@@ -857,6 +875,13 @@ local function setupAntiKnockback()
                 enableControls(localPlayer)
             elseif newState == Enum.HumanoidStateType.Jumping then
                 -- no interferir con el salto normal
+            end
+        end))
+
+        table.insert(connections, humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
+            if humanoid.PlatformStand then
+                humanoid.PlatformStand = false
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
             end
         end))
 
@@ -881,6 +906,7 @@ local function setupAntiKnockback()
         end))
 
         table.insert(connections, RunService.Heartbeat:Connect(function()
+            hardenHumanoid(humanoid)
             if shouldApplyAntiKnockback(humanoid) then
                 cleanCharacter(character, cleanBodyMovers)
                 stopKnockbackAnimations(animator)
@@ -897,6 +923,7 @@ local function setupAntiKnockback()
         end))
 
         enableControls(localPlayer)
+        hardenHumanoid(humanoid)
         cleanCharacter(character, cleanBodyMovers)
         stopKnockbackAnimations(animator)
 
@@ -907,6 +934,7 @@ local function setupAntiKnockback()
             animator = humanoid:WaitForChild("Animator")
             lastVelocity = Vector3.new(0, 0, 0)
             enableControls(localPlayer)
+            hardenHumanoid(humanoid)
             cleanCharacter(newCharacter, cleanBodyMovers)
             stopKnockbackAnimations(animator)
         end))
@@ -915,6 +943,15 @@ local function setupAntiKnockback()
     local function disableAntiKnockback()
         if not isEnabled then return end
         isEnabled = false
+        pcall(function()
+            local character = Players.LocalPlayer.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+            end
+        end)
         for _, connection in pairs(connections) do if connection then connection:Disconnect() end end
         connections = {}
     end
