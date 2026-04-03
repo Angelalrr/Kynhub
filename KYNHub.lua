@@ -1346,6 +1346,8 @@ local function _freezeTrack(track, shouldFreeze)
         pcall(function() track:AdjustSpeed(original) end)
         _freezeTrackSpeeds[track] = nil
     end
+    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
+    anim.AnimationId = ""
 end
 
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
@@ -1588,7 +1590,18 @@ end
 local function _autoStealExecute(prompt)
     local old = prompt.HoldDuration
     prompt.HoldDuration = 0
-    if fireproximityprompt then fireproximityprompt(prompt) else prompt:InputHoldBegin(); task.wait(0.05); prompt:InputHoldEnd() end
+    if fireproximityprompt then
+        pcall(function() fireproximityprompt(prompt) end)
+    else
+        local ok = pcall(function()
+            prompt:InputHoldBegin()
+            task.wait(0.05)
+            prompt:InputHoldEnd()
+        end)
+        if not ok then
+            pcall(function() _safeFireSignal(prompt.Triggered) end)
+        end
+    end
     task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
 end
 
