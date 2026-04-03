@@ -1,5 +1,5 @@
 --// ======================================================
---//               KYN HUB - SCRIPT COMPLETO 
+--//              ⚡ KYN HUB - SCRIPT COMPLETO ⚡
 --// ======================================================
 
 --// ======= THEME KYN HUB =========
@@ -150,10 +150,6 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
-local VirtualInputManager = nil
-pcall(function()
-    VirtualInputManager = game:GetService("VirtualInputManager")
-end)
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -311,13 +307,13 @@ local function _getExecutorName()
     return "Executor desconocido"
 end
 
-local _EXECUTOR_NAME = _getExecutorName()
-local _EXECUTOR_NAME_LC = string.lower(_EXECUTOR_NAME)
-local _IS_MOBILE_DEVICE = UIS.TouchEnabled and not UIS.KeyboardEnabled
-
 local function _notify(title, text, duration)
     local ok = pcall(function()
-        ShowNotification(title, text, THEME.Accent)
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 6
+        })
     end)
     if not ok then
         print(("[KYN Hub] %s - %s"):format(title, text))
@@ -346,78 +342,43 @@ local function _safeFireSignal(signalObj)
 end
 
 local function _resolveGuiParent()
-    if type(gethui) == "function" then
-        local ok, hui = pcall(gethui)
-        if ok and typeof(hui) == "Instance" then
-            return hui
-        end
-    end
-
-    if PlayerGui and PlayerGui.Parent then
-        return PlayerGui
-    end
-
     local canUseCoreGui = pcall(function()
         local probe = Instance.new("ScreenGui")
         probe.Name = "KYN_CoreGuiProbe"
         probe.Parent = CoreGui
         probe:Destroy()
     end)
-    if canUseCoreGui then
-        return CoreGui
-    end
-
-    return PlayerGui or CoreGui
+    return canUseCoreGui and CoreGui or PlayerGui
 end
 
 local function _createScreenGui(name)
     local sg = Instance.new("ScreenGui")
     sg.Name = name
     sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true
-    sg.Enabled = true
-
     local parent = _resolveGuiParent()
     pcall(function()
         sg.Parent = parent
     end)
-
-    if not sg.Parent and PlayerGui then
-        sg.Parent = PlayerGui
-    end
-
-    if not sg.Parent then
-        local lp = Players.LocalPlayer
-        local pg = lp and lp:FindFirstChildOfClass("PlayerGui")
-        if pg then sg.Parent = pg end
-    end
-
+    if not sg.Parent then sg.Parent = PlayerGui end
     return sg
 end
 
 task.spawn(function()
     task.wait(1)
-    local deviceType = _IS_MOBILE_DEVICE and "Movil" or "PC"
-    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(_EXECUTOR_NAME, deviceType), 8)
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = _getExecutorName()
+    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
 end)
 
 -- Limpiar GUI antigua
-local function _safeFind(parent, childName)
-    if not parent then return nil end
-    local ok, result = pcall(function()
-        return parent:FindFirstChild(childName)
-    end)
-    return ok and result or nil
-end
-
-local OLD = _safeFind(CoreGui, "KYNHubGUI") or _safeFind(PlayerGui, "KYNHubGUI")
+local OLD = CoreGui:FindFirstChild("KYNHubGUI") or PlayerGui:FindFirstChild("KYNHubGUI")
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
 local gui = _createScreenGui("KYNHubGUI")
 
 -- ==========================================
--- // BOTON FLOTANTE (OPEN/CLOSE)
+-- // BOTÓN FLOTANTE (OPEN/CLOSE)
 -- ==========================================
 local btnDragFrame = Instance.new("Frame")
 btnDragFrame.Size = UDim2.new(0, 55, 0, 55)
@@ -460,7 +421,7 @@ toggleBtn.MouseLeave:Connect(function()
 end)
 
 -- ==========================================
--- // BOTON FLOTANTE RAPIDO (CLONE & TP)
+-- // BOTÓN FLOTANTE RÁPIDO (CLONE & TP)
 -- ==========================================
 local cloneDragFrame = Instance.new("Frame")
 cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
@@ -569,7 +530,7 @@ shadow.Parent = mainFrame
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -35, 0, 35)
 title.BackgroundTransparency = 1
-title.Text = "    KYN HUB"
+title.Text = "   ⚡ KYN HUB"
 title.Font = Enum.Font.GothamBlack
 title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
@@ -591,7 +552,7 @@ titleLineGradient.Color = ColorSequence.new{
 titleLineGradient.Parent = titleLine
 
 -- ==========================================
--- // BOTON DE CERRAR (X) Y DIALOGO
+-- // BOTÓN DE CERRAR (X) Y DIÁLOGO
 -- ==========================================
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 35, 0, 35)
@@ -640,7 +601,7 @@ confirmScale.Parent = confirmBox
 local confirmText = Instance.new("TextLabel")
 confirmText.Size = UDim2.new(1, 0, 0, 50)
 confirmText.BackgroundTransparency = 1
-confirmText.Text = "Destruir KYN Hub?"
+confirmText.Text = "¿Destruir KYN Hub?"
 confirmText.Font = Enum.Font.GothamBold
 confirmText.TextSize = 15
 confirmText.TextColor3 = THEME.TextLight
@@ -651,7 +612,7 @@ local btnYes = Instance.new("TextButton")
 btnYes.Size = UDim2.new(0, 90, 0, 30)
 btnYes.Position = UDim2.new(0, 15, 0, 60)
 btnYes.BackgroundColor3 = THEME.Danger
-btnYes.Text = "Si"
+btnYes.Text = "Sí"
 btnYes.Font = Enum.Font.GothamBold
 btnYes.TextColor3 = Color3.new(1,1,1)
 btnYes.ZIndex = 52
@@ -844,7 +805,7 @@ _G.KYNAddButton = function(tabName, data)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 14
     btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Text = "   " .. (data.Name or "Boton")
+    btn.Text = "   " .. (data.Name or "Botón")
     btn.AutoButtonColor = false
     btn.Parent = tab
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -853,7 +814,7 @@ _G.KYNAddButton = function(tabName, data)
     icon.Size = UDim2.new(0, 30, 1, 0)
     icon.Position = UDim2.new(1, -36, 0, 0)
     icon.BackgroundTransparency = 1
-    icon.Text = ""
+    icon.Text = "▶"
     icon.TextColor3 = THEME.Accent
     icon.Font = Enum.Font.GothamBold
     icon.TextSize = 13
@@ -949,7 +910,7 @@ end
 local function _lagEnable()
     if _lagEnabled then return end
     _lagEnabled = true
-    _lagUltra = true -- una sola opcion Anti Lag (incluye ultra)
+    _lagUltra = true -- una sola opción Anti Lag (incluye ultra)
     _lagApplyAll()
     _lagConn = Workspace.DescendantAdded:Connect(_lagOptimize)
     pcall(function() RunService:Set3dRenderingEnabled(true) end)
@@ -1072,7 +1033,7 @@ local function _espStealersApply(char, player)
         local bb = Instance.new("BillboardGui")
         bb.Name="KYN_StealerBB"; bb.Size=UDim2.new(0,150,0,40); bb.StudsOffset=Vector3.new(0,4.5,0); bb.AlwaysOnTop=true; bb.Parent=root
         local lbl = Instance.new("TextLabel")
-        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text=" "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
+        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text="🎒 "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
     end
 end
 local function _espStealersGetRobbing()
@@ -1130,7 +1091,7 @@ local function _xrayStop()
     if Plots then
         for _, Plot in ipairs(Plots:GetChildren()) do
             if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
-                for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0 end end
+                for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 1 end end
             end
         end
     end
@@ -1654,91 +1615,21 @@ local function _autoStealFindPrompt(plotName, slot)
 end
 
 local function _autoStealExecute(prompt)
-    if not prompt then return false end
     local old = prompt.HoldDuration
     prompt.HoldDuration = 0
-    local executed = false
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
-    local originalCFrame = hrp and hrp.CFrame or nil
-
-    local function _markExec(ok, result)
-        if ok and result ~= false then
-            executed = true
-        end
-        return ok and result ~= false
-    end
-
-    local function _moveNearPrompt()
-        if not (hrp and promptPart) then return false end
-        local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
-        local neededDistance = math.max(2, maxDistance - 1)
-        if (hrp.Position - promptPart.Position).Magnitude <= neededDistance then
-            return false
-        end
-        local ok = pcall(function()
-            hrp.CFrame = promptPart.CFrame + Vector3.new(0, 0, 2.5)
-        end)
-        if ok then task.wait(0.05) end
-        return ok
-    end
-
-    local movedNear = _moveNearPrompt()
-
-    -- Estrategia adaptable por executor/dispositivo:
-    -- En PC forzamos multiples metodos porque algunos executores reportan exito pero no disparan.
-    if fireproximityprompt and not _EXECUTOR_NAME_LC:find("swift") then
-        local ok = pcall(function() fireproximityprompt(prompt, 0) end)
-        _markExec(ok, true)
-    end
-
-    local okHold = pcall(function()
-        prompt:InputHoldBegin()
-        task.wait(math.max(0.05, old > 0 and old or 0.1))
-        prompt:InputHoldEnd()
-    end)
-    _markExec(okHold, true)
-
-    local okSignal, signalResult = pcall(function()
-        local triggerSignal = prompt.Triggered
-        if triggerSignal then
-            return _safeFireSignal(triggerSignal)
-        end
-        return false
-    end)
-    _markExec(okSignal, signalResult)
-
-    -- Fallback robusto para executores de PC.
-    if VirtualInputManager and (not _IS_MOBILE_DEVICE) then
-        local keyCode = prompt.KeyboardKeyCode
-        if keyCode == Enum.KeyCode.Unknown then
-            keyCode = Enum.KeyCode.E
-        end
-        local ok = pcall(function()
-            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-            task.wait(0.08)
-            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-        end)
-        _markExec(ok, true)
-    elseif not executed then
-        -- En movil, como ultimo intento si todo fallo.
+    if fireproximityprompt then
+        pcall(function() fireproximityprompt(prompt) end)
+    else
         local ok = pcall(function()
             prompt:InputHoldBegin()
-            task.wait(0.08)
+            task.wait(0.05)
             prompt:InputHoldEnd()
         end)
-        _markExec(ok, true)
+        if not ok then
+            pcall(function() _safeFireSignal(prompt.Triggered) end)
+        end
     end
-
-    if movedNear and hrp and originalCFrame then
-        pcall(function()
-            hrp.CFrame = originalCFrame
-        end)
-    end
-
     task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
-    return executed
 end
 
 local function _autoStealGetPets()
@@ -1834,7 +1725,7 @@ local function _autoStealUpdateVisuals(target)
         _autoStealBillboard.StudsOffset = Vector3.new(0, 3.5, 0)
         _autoStealBillboard.AlwaysOnTop = true
         _autoStealBillboard.Adornee = targetPart
-        _autoStealBillboard.Parent = _resolveGuiParent()
+        _autoStealBillboard.Parent = CoreGui
 
         local bg = Instance.new("Frame", _autoStealBillboard)
         bg.Size = UDim2.new(1, 0, 1, 0)
@@ -1961,6 +1852,7 @@ local function _autoStealApplyCompactState()
         if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "-" end
     end
 end
+
 local function _autoStealBuildGui()
     if _autoStealGui then pcall(function() _autoStealGui:Destroy() end) end
     _autoStealGui = _createScreenGui("KYN_AutoStealGUI")
@@ -1979,7 +1871,7 @@ local function _autoStealBuildGui()
     title.Size = UDim2.new(1, -10, 0, 24)
     title.Position = UDim2.new(0, 8, 0, 4)
     title.BackgroundTransparency = 1
-    title.Text = " KYN HUB  AUTO STEAL"
+    title.Text = "⚡ KYN HUB — AUTO STEAL"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
     title.TextSize = 12
@@ -2090,7 +1982,6 @@ local function _setAutoStealFeature(state)
         _autoStealStartLoop()
     else
         _autoStealFeatureRunning = false
-        _autoStealLoopThread = nil
         _autoStealEnabled = false
         _autoStealManualTargetUid = nil
         _autoStealCurrentTargetUid = nil
@@ -2108,14 +1999,7 @@ local _antiBeeBlacklist = {
     "BlurEffect","ColorCorrectionEffect","BloomEffect","SunRaysEffect","DepthOfFieldEffect","Atmosphere","Sky","Smoke","ParticleEmitter","Beam","Trail","Highlight","PostEffect","SurfaceAppearance","Fire","Sparkles","Explosion","PointLight","SpotLight","SurfaceLight","Shadows","Blur","Fog","ColorGradingEffect","ToneMappingEffect","VignetteEffect","GodRays","Glare","ChromaticAberrationEffect","DistortionEffect","LensFlare","SunFlare","LightInfluence","AmbientOcclusionEffect","RefractionEffect","HeatDistortion","GlitchEffect","ScreenSpaceReflection","MotionBlur","VolumetricLight","RainEffect","SnowEffect","LightningEffect","NeonGlow","ContrastCorrection","ShadowMap","Bloom","Clouds","FogVolume","WaterEffect","WindEffect","PixelateEffect","FilmGrainEffect","CRTShader","NightVisionEffect","InfraredEffect","HazeEffect","ColorBalanceEffect","DynamicLight","AmbientEffect","ScreenDistortion","ScanlineEffect","UnderwaterEffect","ThermalVision","ShockwaveEffect","FlashEffect","ExplosionLight","VFXPart","GlitchScreen","ScreenFlash","OverlayEffect","ShadowEffect","GhostEffect","FogEmitter","WindEmitter","HeatWave","SunGlow","ColorOverlay","VisionDistort","EchoEffect","ScreenOverlay","RenderEffect","VisualEffect","LightingEffect","CameraEffect","WeatherEffect","SmokeTrail","FireTrail","NeonEffect","RefractionLayer","PostProcessingEffect","VisualNoise","ScreenNoise"
 }
 local function _antiBeeIsBlacklisted(obj)
-    for _, name in ipairs(_antiBeeBlacklist) do
-        local ok, isClass = pcall(function()
-            return obj:IsA(name)
-        end)
-        if ok and isClass then
-            return true
-        end
-    end
+    for _, name in ipairs(_antiBeeBlacklist) do if obj:IsA(name) then return true end end
     return false
 end
 local function _antiBeeClearEffects()
@@ -2294,7 +2178,7 @@ function _desyncUpdateHighlight()
         _desyncServerGhost.Color = Color3.fromRGB(255, 0, 0)
         _desyncHighlight.FillColor = Color3.fromRGB(255, 0, 0)
         if txt then
-            txt.Text = " LAGBACK DETECTADO "
+            txt.Text = "⚠️ LAGBACK DETECTADO ⚠️"
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         end
     else
@@ -2451,7 +2335,7 @@ function _buildDesyncPanel()
     title.Size = UDim2.new(1, -20, 0, 25)
     title.Position = UDim2.new(0, 10, 0, 6)
     title.BackgroundTransparency = 1
-    title.Text = " KYN Desync"
+    title.Text = "⚡ KYN Desync"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
@@ -2548,9 +2432,8 @@ function _buildDesyncPanel()
         local sliderDragging = false
         local function updateSlider(input)
             if not _desyncStealSliderBg then return end
-            local sliderWidth = math.max(_desyncStealSliderBg.AbsoluteSize.X, 1)
-            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, sliderWidth)
-            local percent = pos / sliderWidth
+            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, _desyncStealSliderBg.AbsoluteSize.X)
+            local percent = pos / _desyncStealSliderBg.AbsoluteSize.X
             _desyncStealSpeed = math.floor(_desyncStealMin + (percent * (_desyncStealMax - _desyncStealMin)))
             setRawSetting("StealSpeedValue", _desyncStealSpeed)
             _desyncUpdateStealUI()
@@ -2580,7 +2463,6 @@ end
 function _loadDesync()
     if _desyncLoaded then
         if _desyncGui then _desyncGui.Enabled = true end
-        if _desyncPanel then _desyncPanel.Visible = true end
         return
     end
     _desyncLoaded = true
@@ -2610,7 +2492,7 @@ function _runAutoClone()
     if not humanoid or humanoid.Health <= 0 then return end
 
     local clonerTool = LocalPlayer.Backpack:FindFirstChild("Quantum Cloner") or character:FindFirstChild("Quantum Cloner")
-    if not clonerTool then warn("[KYN Hub] No se encontro 'Quantum Cloner' en el inventario."); return end
+    if not clonerTool then warn("[KYN Hub] No se encontró 'Quantum Cloner' en el inventario."); return end
     if clonerTool.Parent ~= character then humanoid:EquipTool(clonerTool) end
     clonerTool:Activate()
 
@@ -2630,12 +2512,12 @@ function _runAutoClone()
             if not tpButton then task.wait(0.05) end
         end
         if not tpButton then
-            warn("[KYN Hub] No se encontro boton TeleportToClone.")
+            warn("[KYN Hub] No se encontró botón TeleportToClone.")
             return
         end
 
         pcall(function()
-            -- Igual al comportamiento del script original: usar MouseButton1Up del boton TP.
+            -- Igual al comportamiento del script original: usar MouseButton1Up del botón TP.
             if not _safeFireSignal(tpButton.MouseButton1Up) and tpButton:IsA("GuiButton") then
                 tpButton:Activate()
             end
@@ -2726,7 +2608,7 @@ _G.KYNAddToggle("Main", {
     end
 })
 _G.KYNAddToggle("Main", {
-    Name = "Mostrar boton Auto Clone",
+    Name = "Mostrar botón Auto Clone",
     Default = SETTINGS.ShowAutoCloneButton,
     Callback = function(state)
         setSetting("ShowAutoCloneButton", state)
@@ -2827,7 +2709,7 @@ _G.KYNAddToggle("Misc", {
 print("[KYN Hub] Cargado correctamente. RightShift para abrir/cerrar.")
 
 do
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Movil" or "PC"
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
     local executorName = "Executor desconocido"
     if type(identifyexecutor) == "function" then
         local ok, result = pcall(identifyexecutor)
