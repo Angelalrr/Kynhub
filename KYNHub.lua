@@ -51,25 +51,32 @@ function ShowNotification(titulo, mensaje, color)
     if not container then
         container = Instance.new("Frame")
         container.Name = "Container"
-        container.Size = UDim2.new(0, 320, 1, -110)
-        container.Position = UDim2.new(1, -335, 0, 85)
+        container.AnchorPoint = Vector2.new(0.5, 0)
+        container.Size = UDim2.new(0, 360, 0, 320)
+        container.Position = UDim2.new(0.5, 0, 0, 18)
         container.BackgroundTransparency = 1
         container.Parent = host
 
         local layout = Instance.new("UIListLayout")
         layout.Padding = UDim.new(0, 8)
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
         layout.VerticalAlignment = Enum.VerticalAlignment.Top
         layout.SortOrder = Enum.SortOrder.LayoutOrder
         layout.Parent = container
     end
 
+    local holder = Instance.new("Frame")
+    holder.Name = "NotificationItem"
+    holder.Size = UDim2.new(1, 0, 0, 72)
+    holder.BackgroundTransparency = 1
+    holder.Parent = container
+
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 72)
+    card.Size = UDim2.new(1, 0, 1, 0)
     card.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
     card.BackgroundTransparency = 0.08
     card.ClipsDescendants = true
-    card.Parent = container
+    card.Parent = holder
     Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 
     local stroke = Instance.new("UIStroke")
@@ -107,13 +114,13 @@ function ShowNotification(titulo, mensaje, color)
     body.Text = tostring(mensaje or "")
     body.Parent = card
 
-    card.AnchorPoint = Vector2.new(1, 0)
-    card.Position = UDim2.new(1, 36, 0, 0)
+    card.AnchorPoint = Vector2.new(0, 0)
+    card.Position = UDim2.new(0, 0, 0, -90)
     card.BackgroundTransparency = 1
     side.BackgroundTransparency = 1
 
     tweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 0),
         BackgroundTransparency = 0.08
     }):Play()
     tweenService:Create(side, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
@@ -121,13 +128,13 @@ function ShowNotification(titulo, mensaje, color)
     task.delay(4, function()
         if not card or not card.Parent then return end
         local out = tweenService:Create(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Position = UDim2.new(1, 36, 0, 0),
+            Position = UDim2.new(0, 0, 0, -90),
             BackgroundTransparency = 1
         })
         tweenService:Create(side, TweenInfo.new(0.22), {BackgroundTransparency = 1}):Play()
         out:Play()
         out.Completed:Wait()
-        if card then card:Destroy() end
+        if holder then holder:Destroy() end
     end)
 end
 
@@ -333,13 +340,6 @@ local function _safeFireSignal(signalObj)
     end
     return false
 end
-
-task.spawn(function()
-    task.wait(1)
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
-    local executorName = _getExecutorName()
-    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
-end)
 
 -- Limpiar GUI antigua
 local OLD = CoreGui:FindFirstChild("KYNHubGUI")
