@@ -266,6 +266,27 @@ local function _bindGuiPosPersistence(key, frame)
     end)
 end
 
+function _ensureGuiOnScreen(key, frame, fallback)
+    if not frame then return end
+    task.defer(function()
+        task.wait()
+        if not (frame and frame.Parent) then return end
+        local camera = Workspace.CurrentCamera
+        local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+        local absPos = frame.AbsolutePosition
+        local absSize = frame.AbsoluteSize
+        local isOffScreen =
+            absPos.X > viewport.X or
+            absPos.Y > viewport.Y or
+            (absPos.X + absSize.X) < 24 or
+            (absPos.Y + absSize.Y) < 24
+        if isOffScreen and fallback then
+            frame.Position = fallback
+            _saveGuiPos(key, frame)
+        end
+    end)
+end
+
 loadSettings()
 
 local function _getExecutorName()
@@ -367,6 +388,7 @@ btnDragFrame.Active = true
 btnDragFrame.Draggable = true
 btnDragFrame.Parent = gui
 _bindGuiPosPersistence("OpenButton", btnDragFrame)
+_ensureGuiOnScreen("OpenButton", btnDragFrame, UDim2.new(0, 20, 0.2, 0))
 
 local toggleBtn = Instance.new("ImageButton")
 toggleBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -410,6 +432,7 @@ cloneDragFrame.Draggable = true
 cloneDragFrame.Parent = gui
 cloneDragFrame.Visible = SETTINGS.ShowAutoCloneButton
 _bindGuiPosPersistence("CloneButton", cloneDragFrame)
+_ensureGuiOnScreen("CloneButton", cloneDragFrame, UDim2.new(1, -74, 0.45, 0))
 
 local cloneQuickBtn = Instance.new("TextButton")
 cloneQuickBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -463,9 +486,10 @@ mainDragFrame.Position = _loadGuiPos("MainPanel", UDim2.new(0.5, -135, 0.5, -150
 mainDragFrame.BackgroundTransparency = 1
 mainDragFrame.Active = true
 mainDragFrame.Draggable = true
-mainDragFrame.Visible = false
+mainDragFrame.Visible = true
 mainDragFrame.Parent = gui
 _bindGuiPosPersistence("MainPanel", mainDragFrame)
+_ensureGuiOnScreen("MainPanel", mainDragFrame, UDim2.new(0.5, -135, 0.5, -150))
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -474,7 +498,7 @@ mainFrame.Parent = mainDragFrame
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
 local uiScale = Instance.new("UIScale")
-uiScale.Scale = 0
+uiScale.Scale = 1
 uiScale.Parent = mainDragFrame
 
 local mainStroke = Instance.new("UIStroke")
@@ -835,7 +859,7 @@ RunService.RenderStepped:Connect(function()
     mainFrame.Position = UDim2.new(0, 0, 0, wave)
 end)
 
-local isOpen, isAnimating = false, false
+local isOpen, isAnimating = true, false
 local function toggleMenu()
     if isAnimating then return end
     isAnimating = true
@@ -1346,8 +1370,6 @@ local function _freezeTrack(track, shouldFreeze)
         pcall(function() track:AdjustSpeed(original) end)
         _freezeTrackSpeeds[track] = nil
     end
-    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
-    anim.AnimationId = ""
 end
 
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
@@ -2235,7 +2257,7 @@ local function _buildDesyncPanel()
     _desyncUpdateStealUI()
 end
 
-local function _loadDesync()
+function _loadDesync()
     if _desyncLoaded then
         if _desyncGui then _desyncGui.Enabled = true end
         return
@@ -2260,7 +2282,7 @@ end
 
 
 
-local function _runAutoClone()
+function _runAutoClone()
     local character = LocalPlayer.Character
     if not character then warn("[KYN Hub] No hay personaje."); return end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
