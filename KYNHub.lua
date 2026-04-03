@@ -150,6 +150,10 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
+local VirtualInputManager = nil
+pcall(function()
+    VirtualInputManager = game:GetService("VirtualInputManager")
+end)
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -309,11 +313,7 @@ end
 
 local function _notify(title, text, duration)
     local ok = pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 6
-        })
+        ShowNotification(title, text, THEME.Accent)
     end)
     if not ok then
         print(("[KYN Hub] %s - %s"):format(title, text))
@@ -1615,21 +1615,81 @@ local function _autoStealFindPrompt(plotName, slot)
 end
 
 local function _autoStealExecute(prompt)
+    if not prompt then return false end
     local old = prompt.HoldDuration
     prompt.HoldDuration = 0
+    local executed = false
+
+    local function _markExec(ok)
+        if ok then executed = true end
+        return ok
+    end
+
     if fireproximityprompt then
-        pcall(function() fireproximityprompt(prompt) end)
-    else
+        local ok = pcall(function() fireproximityprompt(prompt, 0) end)
+        _markExec(ok)
+    end
+
+    if not executed then
         local ok = pcall(function()
             prompt:InputHoldBegin()
             task.wait(0.05)
             prompt:InputHoldEnd()
         end)
-        if not ok then
-            pcall(function() _safeFireSignal(prompt.Triggered) end)
+        _markExec(ok)
+    end
+
+    if not executed then
+        local ok = pcall(function()
+            local triggerSignal = prompt.Triggered
+            if triggerSignal then
+                return _safeFireSignal(triggerSignal)
+            end
+            return false
+        end)
+        _markExec(ok)
+    end
+
+    -- Fallback para executores de PC sin fireproximityprompt:
+    -- acercarse al prompt y simular tecla de interacción.
+    if not executed and VirtualInputManager then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
+        if hrp and promptPart then
+            local originalCFrame = hrp.CFrame
+            local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
+            local neededDistance = math.max(2, maxDistance - 1)
+            local shouldTeleport = (hrp.Position - promptPart.Position).Magnitude > neededDistance
+
+            if shouldTeleport then
+                pcall(function()
+                    hrp.CFrame = promptPart.CFrame + Vector3.new(0, 0, 2.5)
+                end)
+                task.wait(0.05)
+            end
+
+            local keyCode = prompt.KeyboardKeyCode
+            if keyCode == Enum.KeyCode.Unknown then
+                keyCode = Enum.KeyCode.E
+            end
+            local ok = pcall(function()
+                VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+            end)
+            _markExec(ok)
+
+            if shouldTeleport then
+                pcall(function()
+                    hrp.CFrame = originalCFrame
+                end)
+            end
         end
     end
+
     task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
+    return executed
 end
 
 local function _autoStealGetPets()
