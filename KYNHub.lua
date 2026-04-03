@@ -41,6 +41,36 @@ if game.PlaceId ~= ALLOWED_PLACE_ID then
     return
 end
 
+local function _resolveGuiParent()
+    local parent = CoreGui
+
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            parent = hui
+        end
+    end
+
+    if not parent then
+        local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        parent = pg or CoreGui
+    end
+
+    return parent
+end
+
+local function _protectGui(guiObj)
+    if type(syn) == "table" and type(syn.protect_gui) == "function" then
+        pcall(function()
+            syn.protect_gui(guiObj)
+        end)
+    elseif type(protectgui) == "function" then
+        pcall(function()
+            protectgui(guiObj)
+        end)
+    end
+end
+
 --// ======= SETTINGS PERSISTENTES =======
 local CONFIG_FILE = "KYNHub_Settings.json"
 local SETTINGS = {
@@ -208,7 +238,13 @@ if OLD then OLD:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name = "KYNHubGUI"
 gui.ResetOnSpawn = false
-gui.Parent = CoreGui
+_protectGui(gui)
+local parentOk = pcall(function()
+    gui.Parent = _resolveGuiParent()
+end)
+if not parentOk then
+    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
@@ -522,7 +558,9 @@ local function createTab(name)
     tabs[name] = tab
     return tab
 end
-createTab("Main") createTab("Visual") createTab("Misc")
+createTab("Main")
+createTab("Visual")
+createTab("Misc")
 
 local function setActiveTab(name)
     for tabName, tab in pairs(tabs) do tab.Visible = (tabName == name) end
@@ -760,18 +798,36 @@ local function _espPlayerUpdate(player)
         local lbl = Instance.new("TextLabel"); lbl.Name="Label"; lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(0,255,255); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.SourceSansBold; lbl.TextScaled=true; lbl.Parent=bb
     end
     bb.Adornee = hrp
-    local lbl = bb:FindFirstChild("Label") if lbl then lbl.Text=player.Name end
+    local lbl = bb:FindFirstChild("Label")
+    if lbl then
+        lbl.Text = player.Name
+    end
 end
-local function _espPlayerClear() if _espPlayerFolder then for _, v in pairs(_espPlayerFolder:GetChildren()) do v:Destroy() end end end
+local function _espPlayerClear()
+    if _espPlayerFolder then
+        for _, v in pairs(_espPlayerFolder:GetChildren()) do
+            v:Destroy()
+        end
+    end
+end
 Players.PlayerRemoving:Connect(function(player)
     if not _espPlayerFolder then return end
-    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB") if bb then bb:Destroy() end
-    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL") if hl then hl:Destroy() end
+    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB")
+    if bb then
+        bb:Destroy()
+    end
+    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL")
+    if hl then
+        hl:Destroy()
+    end
 end)
 
 local _espBaseEnabled, _espBaseOwnPos = false, nil
 local function _espBaseGetOwnPos()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return nil end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return nil
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local sign=plot:FindFirstChild("PlotSign"); local base=plot:FindFirstChild("DeliveryHitbox")
         if sign and sign:FindFirstChild("YourBase") and sign.YourBase.Enabled and base then return base.Position end
@@ -779,8 +835,14 @@ local function _espBaseGetOwnPos()
     return nil
 end
 local function _espBaseUpdate(plot)
-    local purchases = plot:FindFirstChild("Purchases") if not purchases then return end
-    local plotBlock = purchases:FindFirstChild("PlotBlock") if not plotBlock or not plotBlock:FindFirstChild("Main") then return end
+    local purchases = plot:FindFirstChild("Purchases")
+    if not purchases then
+        return
+    end
+    local plotBlock = purchases:FindFirstChild("PlotBlock")
+    if not plotBlock or not plotBlock:FindFirstChild("Main") then
+        return
+    end
     local main = plotBlock.Main
     local remainingTimeGui = main:FindFirstChild("BillboardGui") and main.BillboardGui:FindFirstChild("RemainingTime")
     local base = plot:FindFirstChild("DeliveryHitbox")
@@ -805,10 +867,21 @@ local function _espBaseUpdate(plot)
     end
 end
 local function _espBaseClear()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local purchases = plot:FindFirstChild("Purchases")
-        if purchases then local pb = purchases:FindFirstChild("PlotBlock"); if pb and pb:FindFirstChild("Main") then local bb = pb.Main:FindFirstChild("KYN_Base_BB"); if bb then bb:Destroy() end end end
+        if purchases then
+            local pb = purchases:FindFirstChild("PlotBlock")
+            if pb and pb:FindFirstChild("Main") then
+                local bb = pb.Main:FindFirstChild("KYN_Base_BB")
+                if bb then
+                    bb:Destroy()
+                end
+            end
+        end
     end
 end
 
@@ -846,8 +919,14 @@ local function _espStealersClearAll()
     for _, player in ipairs(Players:GetPlayers()) do
         local char = player.Character
         if char then
-            local hl = char:FindFirstChild("KYN_StealerHL") if hl then hl:Destroy() end
-            local root = char:FindFirstChild("HumanoidRootPart") if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+            local hl = char:FindFirstChild("KYN_StealerHL")
+            if hl then
+                hl:Destroy()
+            end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root and root:FindFirstChild("KYN_StealerBB") then
+                root.KYN_StealerBB:Destroy()
+            end
         end
     end
 end
@@ -856,7 +935,10 @@ local _xrayEnabled, _xrayConn = false, nil
 local function _xrayStart()
     if _xrayConn then _xrayConn:Disconnect() end
     _xrayConn = RunService.Heartbeat:Connect(function()
-        local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+        local Plots = Workspace:FindFirstChild("Plots")
+        if not Plots then
+            return
+        end
         for _, Plot in ipairs(Plots:GetChildren()) do
             if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
                 for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0.8 end end
@@ -1131,7 +1213,6 @@ local function _freezeStopWalkTracks(humanoid)
         if trackName:find("walk") or trackName:find("run") then
             pcall(function() track:Stop(0) end)
         end
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
 end
 
@@ -1151,29 +1232,6 @@ local function _freezeTrack(track, shouldFreeze)
         _freezeTrackSpeeds[track] = nil
     end
 end
-
-=======
-    end
-end
-
-local function _freezeTrack(track, shouldFreeze)
-    if not track then return end
-    if shouldFreeze then
-        if _freezeTrackSpeeds[track] == nil then
-            local original = 1
-            pcall(function() original = track.Speed end)
-            _freezeTrackSpeeds[track] = original
-        end
-        pcall(function() track:AdjustSpeed(0) end)
-    else
-        local original = _freezeTrackSpeeds[track]
-        if original == nil then original = 1 end
-        pcall(function() track:AdjustSpeed(original) end)
-        _freezeTrackSpeeds[track] = nil
-    end
-end
-
->>>>>>> main
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
     if not animator then return end
     for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
@@ -1448,7 +1506,6 @@ local function _desyncUpdateStatusUI()
     end
     if _desyncStatusCircle then
         _desyncStatusCircle.BackgroundColor3 = _desyncIsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
     if _desyncAutoToggleButton then
         _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
@@ -1460,19 +1517,6 @@ local function _desyncUpdateStealUI()
     if _desyncStealSpeedLabel then
         _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
     end
-=======
-    end
-    if _desyncAutoToggleButton then
-        _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
-        _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
-    end
-end
-
-local function _desyncUpdateStealUI()
-    if _desyncStealSpeedLabel then
-        _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
-    end
->>>>>>> main
     local percent = (_desyncStealSpeed - _desyncStealMin) / (_desyncStealMax - _desyncStealMin)
     if _desyncStealSliderFill then _desyncStealSliderFill.Size = UDim2.new(percent, 0, 1, 0) end
     if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
@@ -1499,8 +1543,6 @@ local function _desyncEnsureStealLoop()
         end
     end)
 end
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
-
 local function _desyncCreateServerGhost(character)
     if _desyncServerGhost then _desyncServerGhost:Destroy() end
     _desyncServerGhost = Instance.new("Part")
@@ -1540,50 +1582,6 @@ local function _desyncCreateServerGhost(character)
     _desyncHighlight.Adornee = _desyncServerGhost
     _desyncHighlight.Enabled = true
 end
-
-=======
-
-local function _desyncCreateServerGhost(character)
-    if _desyncServerGhost then _desyncServerGhost:Destroy() end
-    _desyncServerGhost = Instance.new("Part")
-    _desyncServerGhost.Name = "KYN_DesyncedServerPosition"
-    _desyncServerGhost.Size = Vector3.new(2.5, 2.5, 2.5)
-    _desyncServerGhost.Shape = Enum.PartType.Block
-    _desyncServerGhost.Anchored = true
-    _desyncServerGhost.CanCollide = false
-    _desyncServerGhost.CanTouch = false
-    _desyncServerGhost.CanQuery = false
-    _desyncServerGhost.Material = Enum.Material.ForceField
-    _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
-    _desyncServerGhost.Transparency = 0.2
-
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if hrp then _desyncServerGhost.CFrame = hrp.CFrame end
-
-    local bg = Instance.new("BillboardGui")
-    bg.Name = "ServerPosGui"
-    bg.Size = UDim2.new(0, 250, 0, 50)
-    bg.StudsOffset = Vector3.new(0, 2.5, 0)
-    bg.AlwaysOnTop = true
-    bg.Parent = _desyncServerGhost
-
-    local txt = Instance.new("TextLabel")
-    txt.Name = "ServerText"
-    txt.Size = UDim2.new(1, 0, 1, 0)
-    txt.BackgroundTransparency = 1
-    txt.Text = "Server Position"
-    txt.TextColor3 = Color3.fromRGB(0, 200, 255)
-    txt.TextStrokeTransparency = 0.2
-    txt.Font = Enum.Font.GothamBold
-    txt.TextScaled = true
-    txt.Parent = bg
-
-    _desyncServerGhost.Parent = Workspace
-    _desyncHighlight.Adornee = _desyncServerGhost
-    _desyncHighlight.Enabled = true
-end
-
->>>>>>> main
 local function _desyncUpdateHighlight()
     if not _desyncIsActive or not _desyncServerGhost then return end
     local char = LocalPlayer.Character
@@ -1644,7 +1642,6 @@ end
 local function _desyncApplyToClone(clone, hide)
     for _, obj in ipairs(clone:GetDescendants()) do
         _desyncSetHiddenState(obj, hide)
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
     if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
     if hide then
@@ -1665,28 +1662,6 @@ local function _desyncGetTool()
         local tool = backpack:FindFirstChild(_desyncToolName)
         if tool and tool:IsA("Tool") then return tool end
     end
-=======
-    end
-    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
-    if hide then
-        _desyncCloneWatchConn = clone.DescendantAdded:Connect(function(obj)
-            _desyncSetHiddenState(obj, true)
-        end)
-    end
-end
-
-local function _desyncGetTool()
-    local character = LocalPlayer.Character
-    if character then
-        local tool = character:FindFirstChild(_desyncToolName)
-        if tool and tool:IsA("Tool") then return tool end
-    end
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        local tool = backpack:FindFirstChild(_desyncToolName)
-        if tool and tool:IsA("Tool") then return tool end
-    end
->>>>>>> main
     return nil
 end
 
@@ -1724,15 +1699,7 @@ local function _desyncTriggerTeleportSafely()
         local teleportBtn = qcFrame:WaitForChild("TeleportToClone", 2)
         if teleportBtn and teleportBtn:IsA("GuiButton") then
             _desyncIgnoringTeleport = true
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
             _safeFireSignal(teleportBtn.MouseButton1Up)
-=======
-            if getconnections then
-                for _, conn in ipairs(getconnections(teleportBtn.MouseButton1Up)) do conn:Fire() end
-            elseif firesignal then
-                firesignal(teleportBtn.MouseButton1Up)
-            end
->>>>>>> main
             qcFrame.Visible = false
             task.delay(1, function() _desyncIgnoringTeleport = false end)
         end
