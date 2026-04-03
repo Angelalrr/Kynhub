@@ -1,5 +1,5 @@
 --// ======================================================
---//              ⚡ KYN HUB - SCRIPT COMPLETO ⚡
+--//               KYN HUB - SCRIPT COMPLETO 
 --// ======================================================
 
 --// ======= THEME KYN HUB =========
@@ -369,7 +369,7 @@ end
 
 task.spawn(function()
     task.wait(1)
-    local deviceType = _IS_MOBILE_DEVICE and "Móvil" or "PC"
+    local deviceType = _IS_MOBILE_DEVICE and "Movil" or "PC"
     _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(_EXECUTOR_NAME, deviceType), 8)
 end)
 
@@ -381,7 +381,7 @@ if OLD then OLD:Destroy() end
 local gui = _createScreenGui("KYNHubGUI")
 
 -- ==========================================
--- // BOTÓN FLOTANTE (OPEN/CLOSE)
+-- // BOTON FLOTANTE (OPEN/CLOSE)
 -- ==========================================
 local btnDragFrame = Instance.new("Frame")
 btnDragFrame.Size = UDim2.new(0, 55, 0, 55)
@@ -424,7 +424,7 @@ toggleBtn.MouseLeave:Connect(function()
 end)
 
 -- ==========================================
--- // BOTÓN FLOTANTE RÁPIDO (CLONE & TP)
+-- // BOTON FLOTANTE RAPIDO (CLONE & TP)
 -- ==========================================
 local cloneDragFrame = Instance.new("Frame")
 cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
@@ -533,7 +533,7 @@ shadow.Parent = mainFrame
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -35, 0, 35)
 title.BackgroundTransparency = 1
-title.Text = "   ⚡ KYN HUB"
+title.Text = "    KYN HUB"
 title.Font = Enum.Font.GothamBlack
 title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
@@ -555,7 +555,7 @@ titleLineGradient.Color = ColorSequence.new{
 titleLineGradient.Parent = titleLine
 
 -- ==========================================
--- // BOTÓN DE CERRAR (X) Y DIÁLOGO
+-- // BOTON DE CERRAR (X) Y DIALOGO
 -- ==========================================
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 35, 0, 35)
@@ -604,7 +604,7 @@ confirmScale.Parent = confirmBox
 local confirmText = Instance.new("TextLabel")
 confirmText.Size = UDim2.new(1, 0, 0, 50)
 confirmText.BackgroundTransparency = 1
-confirmText.Text = "¿Destruir KYN Hub?"
+confirmText.Text = "Destruir KYN Hub?"
 confirmText.Font = Enum.Font.GothamBold
 confirmText.TextSize = 15
 confirmText.TextColor3 = THEME.TextLight
@@ -615,7 +615,7 @@ local btnYes = Instance.new("TextButton")
 btnYes.Size = UDim2.new(0, 90, 0, 30)
 btnYes.Position = UDim2.new(0, 15, 0, 60)
 btnYes.BackgroundColor3 = THEME.Danger
-btnYes.Text = "Sí"
+btnYes.Text = "Si"
 btnYes.Font = Enum.Font.GothamBold
 btnYes.TextColor3 = Color3.new(1,1,1)
 btnYes.ZIndex = 52
@@ -808,7 +808,7 @@ _G.KYNAddButton = function(tabName, data)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 14
     btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Text = "   " .. (data.Name or "Botón")
+    btn.Text = "   " .. (data.Name or "Boton")
     btn.AutoButtonColor = false
     btn.Parent = tab
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -817,7 +817,7 @@ _G.KYNAddButton = function(tabName, data)
     icon.Size = UDim2.new(0, 30, 1, 0)
     icon.Position = UDim2.new(1, -36, 0, 0)
     icon.BackgroundTransparency = 1
-    icon.Text = "▶"
+    icon.Text = ""
     icon.TextColor3 = THEME.Accent
     icon.Font = Enum.Font.GothamBold
     icon.TextSize = 13
@@ -913,7 +913,7 @@ end
 local function _lagEnable()
     if _lagEnabled then return end
     _lagEnabled = true
-    _lagUltra = true -- una sola opción Anti Lag (incluye ultra)
+    _lagUltra = true -- una sola opcion Anti Lag (incluye ultra)
     _lagApplyAll()
     _lagConn = Workspace.DescendantAdded:Connect(_lagOptimize)
     pcall(function() RunService:Set3dRenderingEnabled(true) end)
@@ -1036,7 +1036,7 @@ local function _espStealersApply(char, player)
         local bb = Instance.new("BillboardGui")
         bb.Name="KYN_StealerBB"; bb.Size=UDim2.new(0,150,0,40); bb.StudsOffset=Vector3.new(0,4.5,0); bb.AlwaysOnTop=true; bb.Parent=root
         local lbl = Instance.new("TextLabel")
-        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text="🎒 "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
+        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text=" "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
     end
 end
 local function _espStealersGetRobbing()
@@ -1651,7 +1651,7 @@ local function _autoStealExecute(prompt)
     local movedNear = _moveNearPrompt()
 
     -- Estrategia adaptable por executor/dispositivo:
-    -- En PC forzamos múltiples métodos porque algunos executores reportan éxito pero no disparan.
+    -- En PC forzamos multiples metodos porque algunos executores reportan exito pero no disparan.
     if fireproximityprompt and not _EXECUTOR_NAME_LC:find("swift") then
         local ok = pcall(function() fireproximityprompt(prompt, 0) end)
         _markExec(ok, true)
@@ -1686,7 +1686,7 @@ local function _autoStealExecute(prompt)
         end)
         _markExec(ok, true)
     elseif not executed then
-        -- En móvil, como último intento si todo falló.
+        -- En movil, como ultimo intento si todo fallo.
         local ok = pcall(function()
             prompt:InputHoldBegin()
             task.wait(0.08)
@@ -1943,7 +1943,7 @@ local function _autoStealBuildGui()
     title.Size = UDim2.new(1, -10, 0, 24)
     title.Position = UDim2.new(0, 8, 0, 4)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ KYN HUB — AUTO STEAL"
+    title.Text = " KYN HUB  AUTO STEAL"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
     title.TextSize = 12
@@ -2250,7 +2250,7 @@ function _desyncUpdateHighlight()
         _desyncServerGhost.Color = Color3.fromRGB(255, 0, 0)
         _desyncHighlight.FillColor = Color3.fromRGB(255, 0, 0)
         if txt then
-            txt.Text = "⚠️ LAGBACK DETECTADO ⚠️"
+            txt.Text = " LAGBACK DETECTADO "
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         end
     else
@@ -2407,7 +2407,7 @@ function _buildDesyncPanel()
     title.Size = UDim2.new(1, -20, 0, 25)
     title.Position = UDim2.new(0, 10, 0, 6)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ KYN Desync"
+    title.Text = " KYN Desync"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
@@ -2564,7 +2564,7 @@ function _runAutoClone()
     if not humanoid or humanoid.Health <= 0 then return end
 
     local clonerTool = LocalPlayer.Backpack:FindFirstChild("Quantum Cloner") or character:FindFirstChild("Quantum Cloner")
-    if not clonerTool then warn("[KYN Hub] No se encontró 'Quantum Cloner' en el inventario."); return end
+    if not clonerTool then warn("[KYN Hub] No se encontro 'Quantum Cloner' en el inventario."); return end
     if clonerTool.Parent ~= character then humanoid:EquipTool(clonerTool) end
     clonerTool:Activate()
 
@@ -2584,12 +2584,12 @@ function _runAutoClone()
             if not tpButton then task.wait(0.05) end
         end
         if not tpButton then
-            warn("[KYN Hub] No se encontró botón TeleportToClone.")
+            warn("[KYN Hub] No se encontro boton TeleportToClone.")
             return
         end
 
         pcall(function()
-            -- Igual al comportamiento del script original: usar MouseButton1Up del botón TP.
+            -- Igual al comportamiento del script original: usar MouseButton1Up del boton TP.
             if not _safeFireSignal(tpButton.MouseButton1Up) and tpButton:IsA("GuiButton") then
                 tpButton:Activate()
             end
@@ -2680,7 +2680,7 @@ _G.KYNAddToggle("Main", {
     end
 })
 _G.KYNAddToggle("Main", {
-    Name = "Mostrar botón Auto Clone",
+    Name = "Mostrar boton Auto Clone",
     Default = SETTINGS.ShowAutoCloneButton,
     Callback = function(state)
         setSetting("ShowAutoCloneButton", state)
@@ -2781,7 +2781,7 @@ _G.KYNAddToggle("Misc", {
 print("[KYN Hub] Cargado correctamente. RightShift para abrir/cerrar.")
 
 do
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Movil" or "PC"
     local executorName = "Executor desconocido"
     if type(identifyexecutor) == "function" then
         local ok, result = pcall(identifyexecutor)
