@@ -150,6 +150,10 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
+local VirtualInputManager = nil
+pcall(function()
+    VirtualInputManager = game:GetService("VirtualInputManager")
+end)
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -309,11 +313,7 @@ end
 
 local function _notify(title, text, duration)
     local ok = pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 6
-        })
+        ShowNotification(title, text, THEME.Accent)
     end)
     if not ok then
         print(("[KYN Hub] %s - %s"):format(title, text))
@@ -1569,19 +1569,13 @@ local _autoStealMode = "Priority"
 local _autoStealGui, _autoStealFrame = nil, nil
 local _autoStealTargetLabel, _autoStealMainButton, _autoStealModeButton = nil, nil, nil
 local _autoStealListScroll, _autoStealListLayout = nil, nil
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
 local _autoStealListTitle, _autoStealMinimizeButton = nil, nil
-=======
->>>>>>> main
 local _autoStealBeam, _autoStealAtt0, _autoStealAtt1, _autoStealBillboard = nil, nil, nil, nil
 local _autoStealLoopThread, _autoStealDeps = nil, nil
 local _autoStealFeatureRunning = false
 local _autoStealManualTargetUid = nil
 local _autoStealCurrentTargetUid = nil
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
 local _autoStealMinimized = false
-=======
->>>>>>> main
 local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
 
 local function _autoStealEnsureDeps()
@@ -1621,21 +1615,81 @@ local function _autoStealFindPrompt(plotName, slot)
 end
 
 local function _autoStealExecute(prompt)
+    if not prompt then return false end
     local old = prompt.HoldDuration
     prompt.HoldDuration = 0
+    local executed = false
+
+    local function _markExec(ok)
+        if ok then executed = true end
+        return ok
+    end
+
     if fireproximityprompt then
-        pcall(function() fireproximityprompt(prompt) end)
-    else
+        local ok = pcall(function() fireproximityprompt(prompt, 0) end)
+        _markExec(ok)
+    end
+
+    if not executed then
         local ok = pcall(function()
             prompt:InputHoldBegin()
             task.wait(0.05)
             prompt:InputHoldEnd()
         end)
-        if not ok then
-            pcall(function() _safeFireSignal(prompt.Triggered) end)
+        _markExec(ok)
+    end
+
+    if not executed then
+        local ok = pcall(function()
+            local triggerSignal = prompt.Triggered
+            if triggerSignal then
+                return _safeFireSignal(triggerSignal)
+            end
+            return false
+        end)
+        _markExec(ok)
+    end
+
+    -- Fallback para executores de PC sin fireproximityprompt:
+    -- acercarse al prompt y simular tecla de interacción.
+    if not executed and VirtualInputManager then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
+        if hrp and promptPart then
+            local originalCFrame = hrp.CFrame
+            local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
+            local neededDistance = math.max(2, maxDistance - 1)
+            local shouldTeleport = (hrp.Position - promptPart.Position).Magnitude > neededDistance
+
+            if shouldTeleport then
+                pcall(function()
+                    hrp.CFrame = promptPart.CFrame + Vector3.new(0, 0, 2.5)
+                end)
+                task.wait(0.05)
+            end
+
+            local keyCode = prompt.KeyboardKeyCode
+            if keyCode == Enum.KeyCode.Unknown then
+                keyCode = Enum.KeyCode.E
+            end
+            local ok = pcall(function()
+                VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+            end)
+            _markExec(ok)
+
+            if shouldTeleport then
+                pcall(function()
+                    hrp.CFrame = originalCFrame
+                end)
+            end
         end
     end
+
     task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
+    return executed
 end
 
 local function _autoStealGetPets()
@@ -1844,7 +1898,6 @@ local function _autoStealUpdateTopList(sortedPets)
     _autoStealListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 31)
 end
 
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
 local function _autoStealApplyCompactState()
     if not _autoStealFrame then return end
     if _autoStealMinimized then
@@ -1859,18 +1912,11 @@ local function _autoStealApplyCompactState()
         if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "-" end
     end
 end
-
-=======
->>>>>>> main
 local function _autoStealBuildGui()
     if _autoStealGui then pcall(function() _autoStealGui:Destroy() end) end
     _autoStealGui = _createScreenGui("KYN_AutoStealGUI")
     _autoStealFrame = Instance.new("Frame")
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
     _autoStealFrame.Size = UDim2.new(0, 255, 0, 300)
-=======
-    _autoStealFrame.Size = UDim2.new(0, 285, 0, 375)
->>>>>>> main
     _autoStealFrame.Position = _loadGuiPos("AutoStealPanel", UDim2.new(0.05, 0, 0.35, 0))
     _autoStealFrame.BackgroundColor3 = THEME.FrameBg
     _autoStealFrame.BorderSizePixel = 0
@@ -1923,7 +1969,6 @@ local function _autoStealBuildGui()
     _autoStealModeButton.TextSize = 11
     _autoStealModeButton.TextColor3 = THEME.TextLight
     Instance.new("UICorner", _autoStealModeButton).CornerRadius = UDim.new(0, 6)
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
     _autoStealListTitle = Instance.new("TextLabel", _autoStealFrame)
     _autoStealListTitle.Size = UDim2.new(1, -16, 0, 18)
     _autoStealListTitle.Position = UDim2.new(0, 8, 0, 122)
@@ -1936,20 +1981,6 @@ local function _autoStealBuildGui()
 
     _autoStealListScroll = Instance.new("ScrollingFrame", _autoStealFrame)
     _autoStealListScroll.Size = UDim2.new(1, -16, 1, -152)
-=======
-    local listTitle = Instance.new("TextLabel", _autoStealFrame)
-    listTitle.Size = UDim2.new(1, -16, 0, 18)
-    listTitle.Position = UDim2.new(0, 8, 0, 122)
-    listTitle.BackgroundTransparency = 1
-    listTitle.Text = "TOP 10 DISPONIBLES (click para forzar)"
-    listTitle.TextColor3 = Color3.fromRGB(150, 150, 160)
-    listTitle.Font = Enum.Font.GothamBold
-    listTitle.TextSize = 10
-    listTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    _autoStealListScroll = Instance.new("ScrollingFrame", _autoStealFrame)
-    _autoStealListScroll.Size = UDim2.new(1, -16, 1, -148)
->>>>>>> main
     _autoStealListScroll.Position = UDim2.new(0, 8, 0, 142)
     _autoStealListScroll.BackgroundTransparency = 1
     _autoStealListScroll.BorderSizePixel = 0
@@ -1974,14 +2005,11 @@ local function _autoStealBuildGui()
         _autoStealManualTargetUid = nil
         _autoStealRefreshUi()
     end)
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
     _autoStealMinimizeButton.MouseButton1Click:Connect(function()
         _autoStealMinimized = not _autoStealMinimized
         _autoStealApplyCompactState()
     end)
     _autoStealApplyCompactState()
-=======
->>>>>>> main
     _autoStealRefreshUi()
 end
 
