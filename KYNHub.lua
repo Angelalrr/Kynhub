@@ -20,6 +20,124 @@ local THEME = {
     Danger         = Color3.fromRGB(255, 60, 80)
 }
 
+function ShowNotification(titulo, mensaje, color)
+    local tweenService = game:GetService("TweenService")
+    local players = game:GetService("Players")
+    local coreGui = game:GetService("CoreGui")
+
+    local parentGui = coreGui
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            parentGui = hui
+        end
+    end
+    if not parentGui then
+        local lp = players.LocalPlayer
+        parentGui = lp and lp:FindFirstChildOfClass("PlayerGui") or coreGui
+    end
+
+    local host = parentGui:FindFirstChild("KYNHubNotifyHost")
+    if not host then
+        host = Instance.new("ScreenGui")
+        host.Name = "KYNHubNotifyHost"
+        host.ResetOnSpawn = false
+        host.IgnoreGuiInset = true
+        host.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        host.Parent = parentGui
+    end
+
+    local container = host:FindFirstChild("Container")
+    if not container then
+        container = Instance.new("Frame")
+        container.Name = "Container"
+        container.AnchorPoint = Vector2.new(0.5, 0)
+        container.Size = UDim2.new(0, 360, 0, 320)
+        container.Position = UDim2.new(0.5, 0, 0, 18)
+        container.BackgroundTransparency = 1
+        container.Parent = host
+
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 8)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        layout.VerticalAlignment = Enum.VerticalAlignment.Top
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = container
+    end
+
+    local holder = Instance.new("Frame")
+    holder.Name = "NotificationItem"
+    holder.Size = UDim2.new(1, 0, 0, 72)
+    holder.BackgroundTransparency = 1
+    holder.Parent = container
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 1, 0)
+    card.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+    card.BackgroundTransparency = 0.08
+    card.ClipsDescendants = true
+    card.Parent = holder
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(40, 44, 58)
+    stroke.Thickness = 1
+    stroke.Parent = card
+
+    local side = Instance.new("Frame")
+    side.Size = UDim2.new(0, 5, 1, 0)
+    side.BackgroundColor3 = THEME.Accent
+    side.BorderSizePixel = 0
+    side.Parent = card
+
+    local title = Instance.new("TextLabel")
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, 14, 0, 8)
+    title.Size = UDim2.new(1, -22, 0, 22)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextColor3 = color or THEME.Accent
+    title.Text = tostring(titulo or "KYN HUB")
+    title.Parent = card
+
+    local body = Instance.new("TextLabel")
+    body.BackgroundTransparency = 1
+    body.Position = UDim2.new(0, 14, 0, 28)
+    body.Size = UDim2.new(1, -22, 1, -34)
+    body.Font = Enum.Font.Gotham
+    body.TextSize = 12
+    body.TextWrapped = true
+    body.TextXAlignment = Enum.TextXAlignment.Left
+    body.TextYAlignment = Enum.TextYAlignment.Top
+    body.TextColor3 = Color3.fromRGB(235, 240, 250)
+    body.Text = tostring(mensaje or "")
+    body.Parent = card
+
+    card.AnchorPoint = Vector2.new(0, 0)
+    card.Position = UDim2.new(0, 0, 0, -90)
+    card.BackgroundTransparency = 1
+    side.BackgroundTransparency = 1
+
+    tweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 0.08
+    }):Play()
+    tweenService:Create(side, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+
+    task.delay(4, function()
+        if not card or not card.Parent then return end
+        local out = tweenService:Create(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0, 0, 0, -90),
+            BackgroundTransparency = 1
+        })
+        tweenService:Create(side, TweenInfo.new(0.22), {BackgroundTransparency = 1}):Play()
+        out:Play()
+        out.Completed:Wait()
+        if holder then holder:Destroy() end
+    end)
+end
+
 --// ======= SERVICES =======
 local CoreGui           = game:GetService("CoreGui")
 local TweenService      = game:GetService("TweenService")
@@ -543,7 +661,9 @@ local function createTab(name)
     tabs[name] = tab
     return tab
 end
-createTab("Main") createTab("Visual") createTab("Misc")
+createTab("Main")
+createTab("Visual")
+createTab("Misc")
 
 local function setActiveTab(name)
     for tabName, tab in pairs(tabs) do tab.Visible = (tabName == name) end
@@ -624,6 +744,11 @@ _G.KYNAddToggle = function(tabName, data)
         state = not state
         apply(true)
         if data.Callback then pcall(data.Callback, state) end
+        if state then
+            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " ACTIVADO", Color3.fromRGB(80, 255, 120))
+        else
+            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " DESACTIVADO", Color3.fromRGB(255, 90, 90))
+        end
     end)
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleHover}):Play()
@@ -781,18 +906,36 @@ local function _espPlayerUpdate(player)
         local lbl = Instance.new("TextLabel"); lbl.Name="Label"; lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(0,255,255); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.SourceSansBold; lbl.TextScaled=true; lbl.Parent=bb
     end
     bb.Adornee = hrp
-    local lbl = bb:FindFirstChild("Label") if lbl then lbl.Text=player.Name end
+    local lbl = bb:FindFirstChild("Label")
+    if lbl then
+        lbl.Text = player.Name
+    end
 end
-local function _espPlayerClear() if _espPlayerFolder then for _, v in pairs(_espPlayerFolder:GetChildren()) do v:Destroy() end end end
+local function _espPlayerClear()
+    if _espPlayerFolder then
+        for _, v in pairs(_espPlayerFolder:GetChildren()) do
+            v:Destroy()
+        end
+    end
+end
 Players.PlayerRemoving:Connect(function(player)
     if not _espPlayerFolder then return end
-    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB") if bb then bb:Destroy() end
-    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL") if hl then hl:Destroy() end
+    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB")
+    if bb then
+        bb:Destroy()
+    end
+    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL")
+    if hl then
+        hl:Destroy()
+    end
 end)
 
 local _espBaseEnabled, _espBaseOwnPos = false, nil
 local function _espBaseGetOwnPos()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return nil end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return nil
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local sign=plot:FindFirstChild("PlotSign"); local base=plot:FindFirstChild("DeliveryHitbox")
         if sign and sign:FindFirstChild("YourBase") and sign.YourBase.Enabled and base then return base.Position end
@@ -800,8 +943,14 @@ local function _espBaseGetOwnPos()
     return nil
 end
 local function _espBaseUpdate(plot)
-    local purchases = plot:FindFirstChild("Purchases") if not purchases then return end
-    local plotBlock = purchases:FindFirstChild("PlotBlock") if not plotBlock or not plotBlock:FindFirstChild("Main") then return end
+    local purchases = plot:FindFirstChild("Purchases")
+    if not purchases then
+        return
+    end
+    local plotBlock = purchases:FindFirstChild("PlotBlock")
+    if not plotBlock or not plotBlock:FindFirstChild("Main") then
+        return
+    end
     local main = plotBlock.Main
     local remainingTimeGui = main:FindFirstChild("BillboardGui") and main.BillboardGui:FindFirstChild("RemainingTime")
     local base = plot:FindFirstChild("DeliveryHitbox")
@@ -826,10 +975,21 @@ local function _espBaseUpdate(plot)
     end
 end
 local function _espBaseClear()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local purchases = plot:FindFirstChild("Purchases")
-        if purchases then local pb = purchases:FindFirstChild("PlotBlock"); if pb and pb:FindFirstChild("Main") then local bb = pb.Main:FindFirstChild("KYN_Base_BB"); if bb then bb:Destroy() end end end
+        if purchases then
+            local pb = purchases:FindFirstChild("PlotBlock")
+            if pb and pb:FindFirstChild("Main") then
+                local bb = pb.Main:FindFirstChild("KYN_Base_BB")
+                if bb then
+                    bb:Destroy()
+                end
+            end
+        end
     end
 end
 
@@ -867,8 +1027,14 @@ local function _espStealersClearAll()
     for _, player in ipairs(Players:GetPlayers()) do
         local char = player.Character
         if char then
-            local hl = char:FindFirstChild("KYN_StealerHL") if hl then hl:Destroy() end
-            local root = char:FindFirstChild("HumanoidRootPart") if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+            local hl = char:FindFirstChild("KYN_StealerHL")
+            if hl then
+                hl:Destroy()
+            end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root and root:FindFirstChild("KYN_StealerBB") then
+                root.KYN_StealerBB:Destroy()
+            end
         end
     end
 end
@@ -877,7 +1043,10 @@ local _xrayEnabled, _xrayConn = false, nil
 local function _xrayStart()
     if _xrayConn then _xrayConn:Disconnect() end
     _xrayConn = RunService.Heartbeat:Connect(function()
-        local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+        local Plots = Workspace:FindFirstChild("Plots")
+        if not Plots then
+            return
+        end
         for _, Plot in ipairs(Plots:GetChildren()) do
             if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
                 for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0.8 end end
@@ -2293,3 +2462,21 @@ _G.KYNAddToggle("Misc", {
 })
 
 print("[KYN Hub] Cargado correctamente. RightShift para abrir/cerrar.")
+
+do
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = "Executor desconocido"
+    if type(identifyexecutor) == "function" then
+        local ok, result = pcall(identifyexecutor)
+        if ok and type(result) == "string" and result ~= "" then
+            executorName = result
+        end
+    end
+
+    local playerName = (LocalPlayer and LocalPlayer.Name) or "Usuario"
+    ShowNotification(
+        "KYN HUB",
+        ("KYN HUB CARGADO. Bienvenido, %s. Ejecutor: %s | Dispositivo: %s"):format(playerName, executorName, deviceType),
+        THEME.Accent
+    )
+end
