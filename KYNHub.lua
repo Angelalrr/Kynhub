@@ -1,5 +1,5 @@
 --// ======================================================
---//              ⚡ KYN HUB - SCRIPT COMPLETO ⚡
+--//               KYN HUB - SCRIPT COMPLETO 
 --// ======================================================
 
 --// ======= THEME KYN HUB =========
@@ -150,6 +150,10 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
+local VirtualInputManager = nil
+pcall(function()
+    VirtualInputManager = game:GetService("VirtualInputManager")
+end)
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -307,13 +311,13 @@ local function _getExecutorName()
     return "Executor desconocido"
 end
 
+local _EXECUTOR_NAME = _getExecutorName()
+local _EXECUTOR_NAME_LC = string.lower(_EXECUTOR_NAME)
+local _IS_MOBILE_DEVICE = UIS.TouchEnabled and not UIS.KeyboardEnabled
+
 local function _notify(title, text, duration)
     local ok = pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 6
-        })
+        ShowNotification(title, text, THEME.Accent)
     end)
     if not ok then
         print(("[KYN Hub] %s - %s"):format(title, text))
@@ -365,9 +369,8 @@ end
 
 task.spawn(function()
     task.wait(1)
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
-    local executorName = _getExecutorName()
-    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
+    local deviceType = _IS_MOBILE_DEVICE and "Movil" or "PC"
+    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(_EXECUTOR_NAME, deviceType), 8)
 end)
 
 -- Limpiar GUI antigua
@@ -378,7 +381,7 @@ if OLD then OLD:Destroy() end
 local gui = _createScreenGui("KYNHubGUI")
 
 -- ==========================================
--- // BOTÓN FLOTANTE (OPEN/CLOSE)
+-- // BOTON FLOTANTE (OPEN/CLOSE)
 -- ==========================================
 local btnDragFrame = Instance.new("Frame")
 btnDragFrame.Size = UDim2.new(0, 55, 0, 55)
@@ -421,7 +424,7 @@ toggleBtn.MouseLeave:Connect(function()
 end)
 
 -- ==========================================
--- // BOTÓN FLOTANTE RÁPIDO (CLONE & TP)
+-- // BOTON FLOTANTE RAPIDO (CLONE & TP)
 -- ==========================================
 local cloneDragFrame = Instance.new("Frame")
 cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
@@ -530,7 +533,7 @@ shadow.Parent = mainFrame
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -35, 0, 35)
 title.BackgroundTransparency = 1
-title.Text = "   ⚡ KYN HUB"
+title.Text = "    KYN HUB"
 title.Font = Enum.Font.GothamBlack
 title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
@@ -552,7 +555,7 @@ titleLineGradient.Color = ColorSequence.new{
 titleLineGradient.Parent = titleLine
 
 -- ==========================================
--- // BOTÓN DE CERRAR (X) Y DIÁLOGO
+-- // BOTON DE CERRAR (X) Y DIALOGO
 -- ==========================================
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 35, 0, 35)
@@ -601,7 +604,7 @@ confirmScale.Parent = confirmBox
 local confirmText = Instance.new("TextLabel")
 confirmText.Size = UDim2.new(1, 0, 0, 50)
 confirmText.BackgroundTransparency = 1
-confirmText.Text = "¿Destruir KYN Hub?"
+confirmText.Text = "Destruir KYN Hub?"
 confirmText.Font = Enum.Font.GothamBold
 confirmText.TextSize = 15
 confirmText.TextColor3 = THEME.TextLight
@@ -612,7 +615,7 @@ local btnYes = Instance.new("TextButton")
 btnYes.Size = UDim2.new(0, 90, 0, 30)
 btnYes.Position = UDim2.new(0, 15, 0, 60)
 btnYes.BackgroundColor3 = THEME.Danger
-btnYes.Text = "Sí"
+btnYes.Text = "Si"
 btnYes.Font = Enum.Font.GothamBold
 btnYes.TextColor3 = Color3.new(1,1,1)
 btnYes.ZIndex = 52
@@ -805,7 +808,7 @@ _G.KYNAddButton = function(tabName, data)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 14
     btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Text = "   " .. (data.Name or "Botón")
+    btn.Text = "   " .. (data.Name or "Boton")
     btn.AutoButtonColor = false
     btn.Parent = tab
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -814,7 +817,7 @@ _G.KYNAddButton = function(tabName, data)
     icon.Size = UDim2.new(0, 30, 1, 0)
     icon.Position = UDim2.new(1, -36, 0, 0)
     icon.BackgroundTransparency = 1
-    icon.Text = "▶"
+    icon.Text = ""
     icon.TextColor3 = THEME.Accent
     icon.Font = Enum.Font.GothamBold
     icon.TextSize = 13
@@ -910,7 +913,7 @@ end
 local function _lagEnable()
     if _lagEnabled then return end
     _lagEnabled = true
-    _lagUltra = true -- una sola opción Anti Lag (incluye ultra)
+    _lagUltra = true -- una sola opcion Anti Lag (incluye ultra)
     _lagApplyAll()
     _lagConn = Workspace.DescendantAdded:Connect(_lagOptimize)
     pcall(function() RunService:Set3dRenderingEnabled(true) end)
@@ -1033,7 +1036,7 @@ local function _espStealersApply(char, player)
         local bb = Instance.new("BillboardGui")
         bb.Name="KYN_StealerBB"; bb.Size=UDim2.new(0,150,0,40); bb.StudsOffset=Vector3.new(0,4.5,0); bb.AlwaysOnTop=true; bb.Parent=root
         local lbl = Instance.new("TextLabel")
-        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text="🎒 "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
+        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.Text=" "..player.Name; lbl.TextColor3=Color3.fromRGB(255,150,0); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14; lbl.Parent=bb
     end
 end
 local function _espStealersGetRobbing()
@@ -1569,19 +1572,13 @@ local _autoStealMode = "Priority"
 local _autoStealGui, _autoStealFrame = nil, nil
 local _autoStealTargetLabel, _autoStealMainButton, _autoStealModeButton = nil, nil, nil
 local _autoStealListScroll, _autoStealListLayout = nil, nil
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
 local _autoStealListTitle, _autoStealMinimizeButton = nil, nil
-=======
->>>>>>> main
 local _autoStealBeam, _autoStealAtt0, _autoStealAtt1, _autoStealBillboard = nil, nil, nil, nil
 local _autoStealLoopThread, _autoStealDeps = nil, nil
 local _autoStealFeatureRunning = false
 local _autoStealManualTargetUid = nil
 local _autoStealCurrentTargetUid = nil
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
 local _autoStealMinimized = false
-=======
->>>>>>> main
 local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
 
 local function _autoStealEnsureDeps()
@@ -1621,21 +1618,91 @@ local function _autoStealFindPrompt(plotName, slot)
 end
 
 local function _autoStealExecute(prompt)
+    if not prompt then return false end
     local old = prompt.HoldDuration
     prompt.HoldDuration = 0
-    if fireproximityprompt then
-        pcall(function() fireproximityprompt(prompt) end)
-    else
+    local executed = false
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
+    local originalCFrame = hrp and hrp.CFrame or nil
+
+    local function _markExec(ok, result)
+        if ok and result ~= false then
+            executed = true
+        end
+        return ok and result ~= false
+    end
+
+    local function _moveNearPrompt()
+        if not (hrp and promptPart) then return false end
+        local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
+        local neededDistance = math.max(2, maxDistance - 1)
+        if (hrp.Position - promptPart.Position).Magnitude <= neededDistance then
+            return false
+        end
+        local ok = pcall(function()
+            hrp.CFrame = promptPart.CFrame + Vector3.new(0, 0, 2.5)
+        end)
+        if ok then task.wait(0.05) end
+        return ok
+    end
+
+    local movedNear = _moveNearPrompt()
+
+    -- Estrategia adaptable por executor/dispositivo:
+    -- En PC forzamos multiples metodos porque algunos executores reportan exito pero no disparan.
+    if fireproximityprompt and not _EXECUTOR_NAME_LC:find("swift") then
+        local ok = pcall(function() fireproximityprompt(prompt, 0) end)
+        _markExec(ok, true)
+    end
+
+    local okHold = pcall(function()
+        prompt:InputHoldBegin()
+        task.wait(math.max(0.05, old > 0 and old or 0.1))
+        prompt:InputHoldEnd()
+    end)
+    _markExec(okHold, true)
+
+    local okSignal, signalResult = pcall(function()
+        local triggerSignal = prompt.Triggered
+        if triggerSignal then
+            return _safeFireSignal(triggerSignal)
+        end
+        return false
+    end)
+    _markExec(okSignal, signalResult)
+
+    -- Fallback robusto para executores de PC.
+    if VirtualInputManager and (not _IS_MOBILE_DEVICE) then
+        local keyCode = prompt.KeyboardKeyCode
+        if keyCode == Enum.KeyCode.Unknown then
+            keyCode = Enum.KeyCode.E
+        end
+        local ok = pcall(function()
+            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+            task.wait(0.08)
+            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+        end)
+        _markExec(ok, true)
+    elseif not executed then
+        -- En movil, como ultimo intento si todo fallo.
         local ok = pcall(function()
             prompt:InputHoldBegin()
-            task.wait(0.05)
+            task.wait(0.08)
             prompt:InputHoldEnd()
         end)
-        if not ok then
-            pcall(function() _safeFireSignal(prompt.Triggered) end)
-        end
+        _markExec(ok, true)
     end
+
+    if movedNear and hrp and originalCFrame then
+        pcall(function()
+            hrp.CFrame = originalCFrame
+        end)
+    end
+
     task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
+    return executed
 end
 
 local function _autoStealGetPets()
@@ -1844,7 +1911,6 @@ local function _autoStealUpdateTopList(sortedPets)
     _autoStealListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 31)
 end
 
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
 local function _autoStealApplyCompactState()
     if not _autoStealFrame then return end
     if _autoStealMinimized then
@@ -1859,18 +1925,11 @@ local function _autoStealApplyCompactState()
         if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "-" end
     end
 end
-
-=======
->>>>>>> main
 local function _autoStealBuildGui()
     if _autoStealGui then pcall(function() _autoStealGui:Destroy() end) end
     _autoStealGui = _createScreenGui("KYN_AutoStealGUI")
     _autoStealFrame = Instance.new("Frame")
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
     _autoStealFrame.Size = UDim2.new(0, 255, 0, 300)
-=======
-    _autoStealFrame.Size = UDim2.new(0, 285, 0, 375)
->>>>>>> main
     _autoStealFrame.Position = _loadGuiPos("AutoStealPanel", UDim2.new(0.05, 0, 0.35, 0))
     _autoStealFrame.BackgroundColor3 = THEME.FrameBg
     _autoStealFrame.BorderSizePixel = 0
@@ -1884,7 +1943,7 @@ local function _autoStealBuildGui()
     title.Size = UDim2.new(1, -10, 0, 24)
     title.Position = UDim2.new(0, 8, 0, 4)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ KYN HUB — AUTO STEAL"
+    title.Text = " KYN HUB  AUTO STEAL"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
     title.TextSize = 12
@@ -1923,7 +1982,6 @@ local function _autoStealBuildGui()
     _autoStealModeButton.TextSize = 11
     _autoStealModeButton.TextColor3 = THEME.TextLight
     Instance.new("UICorner", _autoStealModeButton).CornerRadius = UDim.new(0, 6)
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
     _autoStealListTitle = Instance.new("TextLabel", _autoStealFrame)
     _autoStealListTitle.Size = UDim2.new(1, -16, 0, 18)
     _autoStealListTitle.Position = UDim2.new(0, 8, 0, 122)
@@ -1936,20 +1994,6 @@ local function _autoStealBuildGui()
 
     _autoStealListScroll = Instance.new("ScrollingFrame", _autoStealFrame)
     _autoStealListScroll.Size = UDim2.new(1, -16, 1, -152)
-=======
-    local listTitle = Instance.new("TextLabel", _autoStealFrame)
-    listTitle.Size = UDim2.new(1, -16, 0, 18)
-    listTitle.Position = UDim2.new(0, 8, 0, 122)
-    listTitle.BackgroundTransparency = 1
-    listTitle.Text = "TOP 10 DISPONIBLES (click para forzar)"
-    listTitle.TextColor3 = Color3.fromRGB(150, 150, 160)
-    listTitle.Font = Enum.Font.GothamBold
-    listTitle.TextSize = 10
-    listTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    _autoStealListScroll = Instance.new("ScrollingFrame", _autoStealFrame)
-    _autoStealListScroll.Size = UDim2.new(1, -16, 1, -148)
->>>>>>> main
     _autoStealListScroll.Position = UDim2.new(0, 8, 0, 142)
     _autoStealListScroll.BackgroundTransparency = 1
     _autoStealListScroll.BorderSizePixel = 0
@@ -1974,14 +2018,11 @@ local function _autoStealBuildGui()
         _autoStealManualTargetUid = nil
         _autoStealRefreshUi()
     end)
-<<<<<<< codex/add-gui-for-top-10-brainrots-29ts06
     _autoStealMinimizeButton.MouseButton1Click:Connect(function()
         _autoStealMinimized = not _autoStealMinimized
         _autoStealApplyCompactState()
     end)
     _autoStealApplyCompactState()
-=======
->>>>>>> main
     _autoStealRefreshUi()
 end
 
@@ -2209,7 +2250,7 @@ function _desyncUpdateHighlight()
         _desyncServerGhost.Color = Color3.fromRGB(255, 0, 0)
         _desyncHighlight.FillColor = Color3.fromRGB(255, 0, 0)
         if txt then
-            txt.Text = "⚠️ LAGBACK DETECTADO ⚠️"
+            txt.Text = " LAGBACK DETECTADO "
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         end
     else
@@ -2366,7 +2407,7 @@ function _buildDesyncPanel()
     title.Size = UDim2.new(1, -20, 0, 25)
     title.Position = UDim2.new(0, 10, 0, 6)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ KYN Desync"
+    title.Text = " KYN Desync"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
@@ -2523,7 +2564,7 @@ function _runAutoClone()
     if not humanoid or humanoid.Health <= 0 then return end
 
     local clonerTool = LocalPlayer.Backpack:FindFirstChild("Quantum Cloner") or character:FindFirstChild("Quantum Cloner")
-    if not clonerTool then warn("[KYN Hub] No se encontró 'Quantum Cloner' en el inventario."); return end
+    if not clonerTool then warn("[KYN Hub] No se encontro 'Quantum Cloner' en el inventario."); return end
     if clonerTool.Parent ~= character then humanoid:EquipTool(clonerTool) end
     clonerTool:Activate()
 
@@ -2543,12 +2584,12 @@ function _runAutoClone()
             if not tpButton then task.wait(0.05) end
         end
         if not tpButton then
-            warn("[KYN Hub] No se encontró botón TeleportToClone.")
+            warn("[KYN Hub] No se encontro boton TeleportToClone.")
             return
         end
 
         pcall(function()
-            -- Igual al comportamiento del script original: usar MouseButton1Up del botón TP.
+            -- Igual al comportamiento del script original: usar MouseButton1Up del boton TP.
             if not _safeFireSignal(tpButton.MouseButton1Up) and tpButton:IsA("GuiButton") then
                 tpButton:Activate()
             end
@@ -2639,7 +2680,7 @@ _G.KYNAddToggle("Main", {
     end
 })
 _G.KYNAddToggle("Main", {
-    Name = "Mostrar botón Auto Clone",
+    Name = "Mostrar boton Auto Clone",
     Default = SETTINGS.ShowAutoCloneButton,
     Callback = function(state)
         setSetting("ShowAutoCloneButton", state)
@@ -2740,7 +2781,7 @@ _G.KYNAddToggle("Misc", {
 print("[KYN Hub] Cargado correctamente. RightShift para abrir/cerrar.")
 
 do
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Movil" or "PC"
     local executorName = "Executor desconocido"
     if type(identifyexecutor) == "function" then
         local ok, result = pcall(identifyexecutor)
