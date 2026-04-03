@@ -346,24 +346,52 @@ local function _safeFireSignal(signalObj)
 end
 
 local function _resolveGuiParent()
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            return hui
+        end
+    end
+
+    if PlayerGui and PlayerGui.Parent then
+        return PlayerGui
+    end
+
     local canUseCoreGui = pcall(function()
         local probe = Instance.new("ScreenGui")
         probe.Name = "KYN_CoreGuiProbe"
         probe.Parent = CoreGui
         probe:Destroy()
     end)
-    return canUseCoreGui and CoreGui or PlayerGui
+    if canUseCoreGui then
+        return CoreGui
+    end
+
+    return PlayerGui or CoreGui
 end
 
 local function _createScreenGui(name)
     local sg = Instance.new("ScreenGui")
     sg.Name = name
     sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.Enabled = true
+
     local parent = _resolveGuiParent()
     pcall(function()
         sg.Parent = parent
     end)
-    if not sg.Parent then sg.Parent = PlayerGui end
+
+    if not sg.Parent and PlayerGui then
+        sg.Parent = PlayerGui
+    end
+
+    if not sg.Parent then
+        local lp = Players.LocalPlayer
+        local pg = lp and lp:FindFirstChildOfClass("PlayerGui")
+        if pg then sg.Parent = pg end
+    end
+
     return sg
 end
 
@@ -374,7 +402,15 @@ task.spawn(function()
 end)
 
 -- Limpiar GUI antigua
-local OLD = CoreGui:FindFirstChild("KYNHubGUI") or PlayerGui:FindFirstChild("KYNHubGUI")
+local function _safeFind(parent, childName)
+    if not parent then return nil end
+    local ok, result = pcall(function()
+        return parent:FindFirstChild(childName)
+    end)
+    return ok and result or nil
+end
+
+local OLD = _safeFind(CoreGui, "KYNHubGUI") or _safeFind(PlayerGui, "KYNHubGUI")
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
@@ -1094,7 +1130,7 @@ local function _xrayStop()
     if Plots then
         for _, Plot in ipairs(Plots:GetChildren()) do
             if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
-                for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 1 end end
+                for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0 end end
             end
         end
     end
