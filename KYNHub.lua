@@ -2259,7 +2259,7 @@ local function _buildDesyncPanel()
     _desyncUpdateStealUI()
 end
 
-local function _loadDesync()
+function _loadDesync()
     if _desyncLoaded then
         if _desyncGui then _desyncGui.Enabled = true end
         return
@@ -2284,7 +2284,7 @@ end
 
 
 
-local function _runAutoClone()
+function _runAutoClone()
     local character = LocalPlayer.Character
     if not character then warn("[KYN Hub] No hay personaje."); return end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
