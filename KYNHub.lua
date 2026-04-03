@@ -20,6 +20,117 @@ local THEME = {
     Danger         = Color3.fromRGB(255, 60, 80)
 }
 
+function ShowNotification(titulo, mensaje, color)
+    local tweenService = game:GetService("TweenService")
+    local players = game:GetService("Players")
+    local coreGui = game:GetService("CoreGui")
+
+    local parentGui = coreGui
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            parentGui = hui
+        end
+    end
+    if not parentGui then
+        local lp = players.LocalPlayer
+        parentGui = lp and lp:FindFirstChildOfClass("PlayerGui") or coreGui
+    end
+
+    local host = parentGui:FindFirstChild("KYNHubNotifyHost")
+    if not host then
+        host = Instance.new("ScreenGui")
+        host.Name = "KYNHubNotifyHost"
+        host.ResetOnSpawn = false
+        host.IgnoreGuiInset = true
+        host.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        host.Parent = parentGui
+    end
+
+    local container = host:FindFirstChild("Container")
+    if not container then
+        container = Instance.new("Frame")
+        container.Name = "Container"
+        container.Size = UDim2.new(0, 320, 1, -110)
+        container.Position = UDim2.new(1, -335, 0, 85)
+        container.BackgroundTransparency = 1
+        container.Parent = host
+
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 8)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+        layout.VerticalAlignment = Enum.VerticalAlignment.Top
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = container
+    end
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 72)
+    card.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+    card.BackgroundTransparency = 0.08
+    card.ClipsDescendants = true
+    card.Parent = container
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(40, 44, 58)
+    stroke.Thickness = 1
+    stroke.Parent = card
+
+    local side = Instance.new("Frame")
+    side.Size = UDim2.new(0, 5, 1, 0)
+    side.BackgroundColor3 = THEME.Accent
+    side.BorderSizePixel = 0
+    side.Parent = card
+
+    local title = Instance.new("TextLabel")
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, 14, 0, 8)
+    title.Size = UDim2.new(1, -22, 0, 22)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextColor3 = color or THEME.Accent
+    title.Text = tostring(titulo or "KYN HUB")
+    title.Parent = card
+
+    local body = Instance.new("TextLabel")
+    body.BackgroundTransparency = 1
+    body.Position = UDim2.new(0, 14, 0, 28)
+    body.Size = UDim2.new(1, -22, 1, -34)
+    body.Font = Enum.Font.Gotham
+    body.TextSize = 12
+    body.TextWrapped = true
+    body.TextXAlignment = Enum.TextXAlignment.Left
+    body.TextYAlignment = Enum.TextYAlignment.Top
+    body.TextColor3 = Color3.fromRGB(235, 240, 250)
+    body.Text = tostring(mensaje or "")
+    body.Parent = card
+
+    card.AnchorPoint = Vector2.new(1, 0)
+    card.Position = UDim2.new(1, 36, 0, 0)
+    card.BackgroundTransparency = 1
+    side.BackgroundTransparency = 1
+
+    tweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 0.08
+    }):Play()
+    tweenService:Create(side, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+
+    task.delay(4, function()
+        if not card or not card.Parent then return end
+        local out = tweenService:Create(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 36, 0, 0),
+            BackgroundTransparency = 1
+        })
+        tweenService:Create(side, TweenInfo.new(0.22), {BackgroundTransparency = 1}):Play()
+        out:Play()
+        out.Completed:Wait()
+        if card then card:Destroy() end
+    end)
+end
+
 --// ======= SERVICES =======
 local CoreGui           = game:GetService("CoreGui")
 local TweenService      = game:GetService("TweenService")
@@ -39,6 +150,36 @@ local ALLOWED_PLACE_ID = 109983668079237
 if game.PlaceId ~= ALLOWED_PLACE_ID then
     warn("[KYN Hub] Script bloqueado: solo funciona en PlaceId " .. tostring(ALLOWED_PLACE_ID))
     return
+end
+
+local function _resolveGuiParent()
+    local parent = CoreGui
+
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            parent = hui
+        end
+    end
+
+    if not parent then
+        local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        parent = pg or CoreGui
+    end
+
+    return parent
+end
+
+local function _protectGui(guiObj)
+    if type(syn) == "table" and type(syn.protect_gui) == "function" then
+        pcall(function()
+            syn.protect_gui(guiObj)
+        end)
+    elseif type(protectgui) == "function" then
+        pcall(function()
+            protectgui(guiObj)
+        end)
+    end
 end
 
 --// ======= SETTINGS PERSISTENTES =======
@@ -208,7 +349,13 @@ if OLD then OLD:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name = "KYNHubGUI"
 gui.ResetOnSpawn = false
-gui.Parent = CoreGui
+_protectGui(gui)
+local parentOk = pcall(function()
+    gui.Parent = _resolveGuiParent()
+end)
+if not parentOk then
+    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
@@ -522,7 +669,9 @@ local function createTab(name)
     tabs[name] = tab
     return tab
 end
-createTab("Main") createTab("Visual") createTab("Misc")
+createTab("Main")
+createTab("Visual")
+createTab("Misc")
 
 local function setActiveTab(name)
     for tabName, tab in pairs(tabs) do tab.Visible = (tabName == name) end
@@ -603,6 +752,11 @@ _G.KYNAddToggle = function(tabName, data)
         state = not state
         apply(true)
         if data.Callback then pcall(data.Callback, state) end
+        if state then
+            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " ACTIVADO", Color3.fromRGB(80, 255, 120))
+        else
+            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " DESACTIVADO", Color3.fromRGB(255, 90, 90))
+        end
     end)
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleHover}):Play()
@@ -760,18 +914,36 @@ local function _espPlayerUpdate(player)
         local lbl = Instance.new("TextLabel"); lbl.Name="Label"; lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(0,255,255); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.SourceSansBold; lbl.TextScaled=true; lbl.Parent=bb
     end
     bb.Adornee = hrp
-    local lbl = bb:FindFirstChild("Label") if lbl then lbl.Text=player.Name end
+    local lbl = bb:FindFirstChild("Label")
+    if lbl then
+        lbl.Text = player.Name
+    end
 end
-local function _espPlayerClear() if _espPlayerFolder then for _, v in pairs(_espPlayerFolder:GetChildren()) do v:Destroy() end end end
+local function _espPlayerClear()
+    if _espPlayerFolder then
+        for _, v in pairs(_espPlayerFolder:GetChildren()) do
+            v:Destroy()
+        end
+    end
+end
 Players.PlayerRemoving:Connect(function(player)
     if not _espPlayerFolder then return end
-    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB") if bb then bb:Destroy() end
-    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL") if hl then hl:Destroy() end
+    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB")
+    if bb then
+        bb:Destroy()
+    end
+    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL")
+    if hl then
+        hl:Destroy()
+    end
 end)
 
 local _espBaseEnabled, _espBaseOwnPos = false, nil
 local function _espBaseGetOwnPos()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return nil end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return nil
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local sign=plot:FindFirstChild("PlotSign"); local base=plot:FindFirstChild("DeliveryHitbox")
         if sign and sign:FindFirstChild("YourBase") and sign.YourBase.Enabled and base then return base.Position end
@@ -779,8 +951,14 @@ local function _espBaseGetOwnPos()
     return nil
 end
 local function _espBaseUpdate(plot)
-    local purchases = plot:FindFirstChild("Purchases") if not purchases then return end
-    local plotBlock = purchases:FindFirstChild("PlotBlock") if not plotBlock or not plotBlock:FindFirstChild("Main") then return end
+    local purchases = plot:FindFirstChild("Purchases")
+    if not purchases then
+        return
+    end
+    local plotBlock = purchases:FindFirstChild("PlotBlock")
+    if not plotBlock or not plotBlock:FindFirstChild("Main") then
+        return
+    end
     local main = plotBlock.Main
     local remainingTimeGui = main:FindFirstChild("BillboardGui") and main.BillboardGui:FindFirstChild("RemainingTime")
     local base = plot:FindFirstChild("DeliveryHitbox")
@@ -805,10 +983,21 @@ local function _espBaseUpdate(plot)
     end
 end
 local function _espBaseClear()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local purchases = plot:FindFirstChild("Purchases")
-        if purchases then local pb = purchases:FindFirstChild("PlotBlock"); if pb and pb:FindFirstChild("Main") then local bb = pb.Main:FindFirstChild("KYN_Base_BB"); if bb then bb:Destroy() end end end
+        if purchases then
+            local pb = purchases:FindFirstChild("PlotBlock")
+            if pb and pb:FindFirstChild("Main") then
+                local bb = pb.Main:FindFirstChild("KYN_Base_BB")
+                if bb then
+                    bb:Destroy()
+                end
+            end
+        end
     end
 end
 
@@ -846,8 +1035,14 @@ local function _espStealersClearAll()
     for _, player in ipairs(Players:GetPlayers()) do
         local char = player.Character
         if char then
-            local hl = char:FindFirstChild("KYN_StealerHL") if hl then hl:Destroy() end
-            local root = char:FindFirstChild("HumanoidRootPart") if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+            local hl = char:FindFirstChild("KYN_StealerHL")
+            if hl then
+                hl:Destroy()
+            end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root and root:FindFirstChild("KYN_StealerBB") then
+                root.KYN_StealerBB:Destroy()
+            end
         end
     end
 end
@@ -856,7 +1051,10 @@ local _xrayEnabled, _xrayConn = false, nil
 local function _xrayStart()
     if _xrayConn then _xrayConn:Disconnect() end
     _xrayConn = RunService.Heartbeat:Connect(function()
-        local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+        local Plots = Workspace:FindFirstChild("Plots")
+        if not Plots then
+            return
+        end
         for _, Plot in ipairs(Plots:GetChildren()) do
             if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
                 for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0.8 end end
@@ -1131,7 +1329,6 @@ local function _freezeStopWalkTracks(humanoid)
         if trackName:find("walk") or trackName:find("run") then
             pcall(function() track:Stop(0) end)
         end
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
 end
 
@@ -1151,29 +1348,6 @@ local function _freezeTrack(track, shouldFreeze)
         _freezeTrackSpeeds[track] = nil
     end
 end
-
-=======
-    end
-end
-
-local function _freezeTrack(track, shouldFreeze)
-    if not track then return end
-    if shouldFreeze then
-        if _freezeTrackSpeeds[track] == nil then
-            local original = 1
-            pcall(function() original = track.Speed end)
-            _freezeTrackSpeeds[track] = original
-        end
-        pcall(function() track:AdjustSpeed(0) end)
-    else
-        local original = _freezeTrackSpeeds[track]
-        if original == nil then original = 1 end
-        pcall(function() track:AdjustSpeed(original) end)
-        _freezeTrackSpeeds[track] = nil
-    end
-end
-
->>>>>>> main
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
     if not animator then return end
     for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
@@ -1448,7 +1622,6 @@ local function _desyncUpdateStatusUI()
     end
     if _desyncStatusCircle then
         _desyncStatusCircle.BackgroundColor3 = _desyncIsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
     if _desyncAutoToggleButton then
         _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
@@ -1460,19 +1633,6 @@ local function _desyncUpdateStealUI()
     if _desyncStealSpeedLabel then
         _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
     end
-=======
-    end
-    if _desyncAutoToggleButton then
-        _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
-        _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
-    end
-end
-
-local function _desyncUpdateStealUI()
-    if _desyncStealSpeedLabel then
-        _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
-    end
->>>>>>> main
     local percent = (_desyncStealSpeed - _desyncStealMin) / (_desyncStealMax - _desyncStealMin)
     if _desyncStealSliderFill then _desyncStealSliderFill.Size = UDim2.new(percent, 0, 1, 0) end
     if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
@@ -1499,8 +1659,6 @@ local function _desyncEnsureStealLoop()
         end
     end)
 end
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
-
 local function _desyncCreateServerGhost(character)
     if _desyncServerGhost then _desyncServerGhost:Destroy() end
     _desyncServerGhost = Instance.new("Part")
@@ -1540,50 +1698,6 @@ local function _desyncCreateServerGhost(character)
     _desyncHighlight.Adornee = _desyncServerGhost
     _desyncHighlight.Enabled = true
 end
-
-=======
-
-local function _desyncCreateServerGhost(character)
-    if _desyncServerGhost then _desyncServerGhost:Destroy() end
-    _desyncServerGhost = Instance.new("Part")
-    _desyncServerGhost.Name = "KYN_DesyncedServerPosition"
-    _desyncServerGhost.Size = Vector3.new(2.5, 2.5, 2.5)
-    _desyncServerGhost.Shape = Enum.PartType.Block
-    _desyncServerGhost.Anchored = true
-    _desyncServerGhost.CanCollide = false
-    _desyncServerGhost.CanTouch = false
-    _desyncServerGhost.CanQuery = false
-    _desyncServerGhost.Material = Enum.Material.ForceField
-    _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
-    _desyncServerGhost.Transparency = 0.2
-
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if hrp then _desyncServerGhost.CFrame = hrp.CFrame end
-
-    local bg = Instance.new("BillboardGui")
-    bg.Name = "ServerPosGui"
-    bg.Size = UDim2.new(0, 250, 0, 50)
-    bg.StudsOffset = Vector3.new(0, 2.5, 0)
-    bg.AlwaysOnTop = true
-    bg.Parent = _desyncServerGhost
-
-    local txt = Instance.new("TextLabel")
-    txt.Name = "ServerText"
-    txt.Size = UDim2.new(1, 0, 1, 0)
-    txt.BackgroundTransparency = 1
-    txt.Text = "Server Position"
-    txt.TextColor3 = Color3.fromRGB(0, 200, 255)
-    txt.TextStrokeTransparency = 0.2
-    txt.Font = Enum.Font.GothamBold
-    txt.TextScaled = true
-    txt.Parent = bg
-
-    _desyncServerGhost.Parent = Workspace
-    _desyncHighlight.Adornee = _desyncServerGhost
-    _desyncHighlight.Enabled = true
-end
-
->>>>>>> main
 local function _desyncUpdateHighlight()
     if not _desyncIsActive or not _desyncServerGhost then return end
     local char = LocalPlayer.Character
@@ -1644,7 +1758,6 @@ end
 local function _desyncApplyToClone(clone, hide)
     for _, obj in ipairs(clone:GetDescendants()) do
         _desyncSetHiddenState(obj, hide)
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
     if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
     if hide then
@@ -1665,28 +1778,6 @@ local function _desyncGetTool()
         local tool = backpack:FindFirstChild(_desyncToolName)
         if tool and tool:IsA("Tool") then return tool end
     end
-=======
-    end
-    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
-    if hide then
-        _desyncCloneWatchConn = clone.DescendantAdded:Connect(function(obj)
-            _desyncSetHiddenState(obj, true)
-        end)
-    end
-end
-
-local function _desyncGetTool()
-    local character = LocalPlayer.Character
-    if character then
-        local tool = character:FindFirstChild(_desyncToolName)
-        if tool and tool:IsA("Tool") then return tool end
-    end
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        local tool = backpack:FindFirstChild(_desyncToolName)
-        if tool and tool:IsA("Tool") then return tool end
-    end
->>>>>>> main
     return nil
 end
 
@@ -1724,15 +1815,7 @@ local function _desyncTriggerTeleportSafely()
         local teleportBtn = qcFrame:WaitForChild("TeleportToClone", 2)
         if teleportBtn and teleportBtn:IsA("GuiButton") then
             _desyncIgnoringTeleport = true
-<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
             _safeFireSignal(teleportBtn.MouseButton1Up)
-=======
-            if getconnections then
-                for _, conn in ipairs(getconnections(teleportBtn.MouseButton1Up)) do conn:Fire() end
-            elseif firesignal then
-                firesignal(teleportBtn.MouseButton1Up)
-            end
->>>>>>> main
             qcFrame.Visible = false
             task.delay(1, function() _desyncIgnoringTeleport = false end)
         end
@@ -2166,3 +2249,21 @@ _G.KYNAddToggle("Misc", {
 })
 
 print("[KYN Hub] Cargado correctamente. RightShift para abrir/cerrar.")
+
+do
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = "Executor desconocido"
+    if type(identifyexecutor) == "function" then
+        local ok, result = pcall(identifyexecutor)
+        if ok and type(result) == "string" and result ~= "" then
+            executorName = result
+        end
+    end
+
+    local playerName = (LocalPlayer and LocalPlayer.Name) or "Usuario"
+    ShowNotification(
+        "KYN HUB",
+        ("KYN HUB CARGADO. Bienvenido, %s. Ejecutor: %s | Dispositivo: %s"):format(playerName, executorName, deviceType),
+        THEME.Accent
+    )
+end
