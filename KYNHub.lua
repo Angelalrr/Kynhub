@@ -1568,9 +1568,14 @@ local _autoStealEnabled = false
 local _autoStealMode = "Priority"
 local _autoStealGui, _autoStealFrame = nil, nil
 local _autoStealTargetLabel, _autoStealMainButton, _autoStealModeButton = nil, nil, nil
+local _autoStealListScroll, _autoStealListLayout = nil, nil
+local _autoStealListTitle, _autoStealMinimizeButton = nil, nil
 local _autoStealBeam, _autoStealAtt0, _autoStealAtt1, _autoStealBillboard = nil, nil, nil, nil
 local _autoStealLoopThread, _autoStealDeps = nil, nil
 local _autoStealFeatureRunning = false
+local _autoStealManualTargetUid = nil
+local _autoStealCurrentTargetUid = nil
+local _autoStealMinimized = false
 local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
 
 local function _autoStealEnsureDeps()
@@ -1650,7 +1655,16 @@ local function _autoStealGetPets()
                             if hrp then pcall(function() dist = (hrp.Position - plot.AnimalPodiums[tostring(slot)].Base.Spawn.Position).Magnitude end) end
                             local rank = 999
                             for i, p in ipairs(_AUTO_STEAL_PRIORITY) do if display:lower() == p:lower() then rank = i break end end
-                            table.insert(pets, {plot = plot.Name, slot = tostring(slot), name = display, genValue = gen, genText = _autoStealFormatMoney(gen), dist = dist, pRank = rank})
+                            table.insert(pets, {
+                                uid = plot.Name .. "_" .. tostring(slot),
+                                plot = plot.Name,
+                                slot = tostring(slot),
+                                name = display,
+                                genValue = gen,
+                                genText = _autoStealFormatMoney(gen),
+                                dist = dist,
+                                pRank = rank
+                            })
                         end
                     end
                 end
@@ -1663,6 +1677,15 @@ end
 
 local function _autoStealPickTarget(pets)
     if #pets == 0 then return nil end
+    if _autoStealMode == "Manual" and _autoStealManualTargetUid then
+        for _, pet in ipairs(pets) do
+            if pet.uid == _autoStealManualTargetUid then
+                return pet
+            end
+        end
+        _autoStealMode = "Priority"
+        _autoStealManualTargetUid = nil
+    end
     if _autoStealMode == "Nearest" then table.sort(pets, function(a,b) return a.dist < b.dist end); return pets[1] end
     if _autoStealMode == "Highest" then table.sort(pets, function(a,b) return a.genValue > b.genValue end); return pets[1] end
     return pets[1]
@@ -1693,6 +1716,53 @@ local function _autoStealUpdateVisuals(target)
     end
     _autoStealBeam.Attachment0 = _autoStealAtt0
     _autoStealBeam.Attachment1 = _autoStealAtt1
+
+    if not _autoStealBillboard or _autoStealBillboard.Adornee ~= targetPart then
+        if _autoStealBillboard then _autoStealBillboard:Destroy() end
+        _autoStealBillboard = Instance.new("BillboardGui")
+        _autoStealBillboard.Name = "KYN_AutoStealTarget"
+        _autoStealBillboard.Size = UDim2.new(0, 165, 0, 48)
+        _autoStealBillboard.StudsOffset = Vector3.new(0, 3.5, 0)
+        _autoStealBillboard.AlwaysOnTop = true
+        _autoStealBillboard.Adornee = targetPart
+        _autoStealBillboard.Parent = CoreGui
+
+        local bg = Instance.new("Frame", _autoStealBillboard)
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = THEME.FrameBg2
+        bg.BackgroundTransparency = 0.15
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
+
+        local stroke = Instance.new("UIStroke", bg)
+        stroke.Color = THEME.Accent
+        stroke.Thickness = 1.2
+
+        local nameLbl = Instance.new("TextLabel", bg)
+        nameLbl.Name = "PetName"
+        nameLbl.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLbl.Position = UDim2.new(0, 0, 0, 2)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextSize = 12
+        nameLbl.TextColor3 = THEME.TextLight
+
+        local valLbl = Instance.new("TextLabel", bg)
+        valLbl.Name = "PetValue"
+        valLbl.Size = UDim2.new(1, 0, 0.5, 0)
+        valLbl.Position = UDim2.new(0, 0, 0.5, -2)
+        valLbl.BackgroundTransparency = 1
+        valLbl.Font = Enum.Font.GothamBold
+        valLbl.TextSize = 11
+        valLbl.TextColor3 = Color3.fromRGB(0, 255, 100)
+    end
+
+    local bg = _autoStealBillboard and _autoStealBillboard:FindFirstChildOfClass("Frame")
+    if bg then
+        local nameLbl = bg:FindFirstChild("PetName")
+        local valLbl = bg:FindFirstChild("PetValue")
+        if nameLbl then nameLbl.Text = target.name end
+        if valLbl then valLbl.Text = target.genText end
+    end
 end
 
 local function _autoStealRefreshUi()
@@ -1703,11 +1773,91 @@ local function _autoStealRefreshUi()
     if _autoStealModeButton then _autoStealModeButton.Text = "Modo: " .. string.upper(_autoStealMode) end
 end
 
+local function _autoStealUpdateTopList(sortedPets)
+    if not _autoStealListScroll then return end
+    for _, child in ipairs(_autoStealListScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local count = math.min(#sortedPets, 10)
+    for i = 1, count do
+        local pet = sortedPets[i]
+        local isTarget = _autoStealEnabled and (pet.uid == _autoStealCurrentTargetUid)
+
+        local item = Instance.new("TextButton", _autoStealListScroll)
+        item.Size = UDim2.new(1, -6, 0, 26)
+        item.BackgroundColor3 = isTarget and Color3.fromRGB(30, 60, 45) or Color3.fromRGB(30, 32, 38)
+        item.Text = ""
+        item.AutoButtonColor = false
+        item.BorderSizePixel = 0
+        Instance.new("UICorner", item).CornerRadius = UDim.new(0, 4)
+
+        item.MouseButton1Click:Connect(function()
+            _autoStealManualTargetUid = pet.uid
+            _autoStealMode = "Manual"
+            _autoStealRefreshUi()
+        end)
+
+        if isTarget then
+            local stroke = Instance.new("UIStroke", item)
+            stroke.Color = Color3.fromRGB(0, 255, 100)
+            stroke.Thickness = 1
+        end
+
+        local rankLbl = Instance.new("TextLabel", item)
+        rankLbl.Size = UDim2.new(0, 24, 1, 0)
+        rankLbl.Position = UDim2.new(0, 3, 0, 0)
+        rankLbl.BackgroundTransparency = 1
+        rankLbl.Text = "#" .. i
+        rankLbl.TextColor3 = isTarget and Color3.fromRGB(0, 255, 100) or THEME.Accent
+        rankLbl.Font = Enum.Font.GothamBold
+        rankLbl.TextSize = 11
+
+        local nameLbl = Instance.new("TextLabel", item)
+        nameLbl.Size = UDim2.new(1, -90, 1, 0)
+        nameLbl.Position = UDim2.new(0, 28, 0, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Text = pet.name
+        nameLbl.TextColor3 = THEME.TextLight
+        nameLbl.Font = Enum.Font.Gotham
+        nameLbl.TextSize = 10
+        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+
+        local valLbl = Instance.new("TextLabel", item)
+        valLbl.Size = UDim2.new(0, 58, 1, 0)
+        valLbl.Position = UDim2.new(1, -60, 0, 0)
+        valLbl.BackgroundTransparency = 1
+        valLbl.Text = pet.genText
+        valLbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+        valLbl.Font = Enum.Font.GothamBold
+        valLbl.TextSize = 10
+        valLbl.TextXAlignment = Enum.TextXAlignment.Right
+    end
+
+    _autoStealListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 31)
+end
+
+local function _autoStealApplyCompactState()
+    if not _autoStealFrame then return end
+    if _autoStealMinimized then
+        _autoStealFrame.Size = UDim2.new(0, 255, 0, 132)
+        if _autoStealListTitle then _autoStealListTitle.Visible = false end
+        if _autoStealListScroll then _autoStealListScroll.Visible = false end
+        if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "+" end
+    else
+        _autoStealFrame.Size = UDim2.new(0, 255, 0, 300)
+        if _autoStealListTitle then _autoStealListTitle.Visible = true end
+        if _autoStealListScroll then _autoStealListScroll.Visible = true end
+        if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "-" end
+    end
+end
+
 local function _autoStealBuildGui()
     if _autoStealGui then pcall(function() _autoStealGui:Destroy() end) end
     _autoStealGui = _createScreenGui("KYN_AutoStealGUI")
     _autoStealFrame = Instance.new("Frame")
-    _autoStealFrame.Size = UDim2.new(0, 230, 0, 120)
+    _autoStealFrame.Size = UDim2.new(0, 255, 0, 300)
     _autoStealFrame.Position = _loadGuiPos("AutoStealPanel", UDim2.new(0.05, 0, 0.35, 0))
     _autoStealFrame.BackgroundColor3 = THEME.FrameBg
     _autoStealFrame.BorderSizePixel = 0
@@ -1726,6 +1876,15 @@ local function _autoStealBuildGui()
     title.Font = Enum.Font.GothamBold
     title.TextSize = 12
     title.TextXAlignment = Enum.TextXAlignment.Left
+    _autoStealMinimizeButton = Instance.new("TextButton", _autoStealFrame)
+    _autoStealMinimizeButton.Size = UDim2.new(0, 22, 0, 20)
+    _autoStealMinimizeButton.Position = UDim2.new(1, -28, 0, 7)
+    _autoStealMinimizeButton.BackgroundColor3 = THEME.FrameBg2
+    _autoStealMinimizeButton.TextColor3 = THEME.TextLight
+    _autoStealMinimizeButton.Font = Enum.Font.GothamBold
+    _autoStealMinimizeButton.TextSize = 14
+    _autoStealMinimizeButton.AutoButtonColor = false
+    Instance.new("UICorner", _autoStealMinimizeButton).CornerRadius = UDim.new(0, 5)
     _autoStealTargetLabel = Instance.new("TextLabel", _autoStealFrame)
     _autoStealTargetLabel.Size = UDim2.new(1, -10, 0, 20)
     _autoStealTargetLabel.Position = UDim2.new(0, 8, 0, 28)
@@ -1745,14 +1904,53 @@ local function _autoStealBuildGui()
     Instance.new("UICorner", _autoStealMainButton).CornerRadius = UDim.new(0, 7)
     _autoStealModeButton = Instance.new("TextButton", _autoStealFrame)
     _autoStealModeButton.Size = UDim2.new(1, -16, 0, 24)
-    _autoStealModeButton.Position = UDim2.new(0, 8, 0, 90)
+    _autoStealModeButton.Position = UDim2.new(0, 8, 0, 92)
     _autoStealModeButton.BackgroundColor3 = THEME.FrameBg2
     _autoStealModeButton.Font = Enum.Font.GothamBold
     _autoStealModeButton.TextSize = 11
     _autoStealModeButton.TextColor3 = THEME.TextLight
     Instance.new("UICorner", _autoStealModeButton).CornerRadius = UDim.new(0, 6)
-    _autoStealMainButton.MouseButton1Click:Connect(function() _autoStealEnabled = not _autoStealEnabled _autoStealRefreshUi() end)
-    _autoStealModeButton.MouseButton1Click:Connect(function() if _autoStealMode == "Priority" then _autoStealMode = "Nearest" elseif _autoStealMode == "Nearest" then _autoStealMode = "Highest" else _autoStealMode = "Priority" end _autoStealRefreshUi() end)
+    _autoStealListTitle = Instance.new("TextLabel", _autoStealFrame)
+    _autoStealListTitle.Size = UDim2.new(1, -16, 0, 18)
+    _autoStealListTitle.Position = UDim2.new(0, 8, 0, 122)
+    _autoStealListTitle.BackgroundTransparency = 1
+    _autoStealListTitle.Text = "TOP 10 (click para forzar)"
+    _autoStealListTitle.TextColor3 = Color3.fromRGB(150, 150, 160)
+    _autoStealListTitle.Font = Enum.Font.GothamBold
+    _autoStealListTitle.TextSize = 10
+    _autoStealListTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    _autoStealListScroll = Instance.new("ScrollingFrame", _autoStealFrame)
+    _autoStealListScroll.Size = UDim2.new(1, -16, 1, -152)
+    _autoStealListScroll.Position = UDim2.new(0, 8, 0, 142)
+    _autoStealListScroll.BackgroundTransparency = 1
+    _autoStealListScroll.BorderSizePixel = 0
+    _autoStealListScroll.ScrollBarThickness = 4
+    _autoStealListScroll.ScrollBarImageColor3 = THEME.Accent
+    _autoStealListLayout = Instance.new("UIListLayout", _autoStealListScroll)
+    _autoStealListLayout.Padding = UDim.new(0, 5)
+    _autoStealListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    _autoStealMainButton.MouseButton1Click:Connect(function()
+        _autoStealEnabled = not _autoStealEnabled
+        _autoStealRefreshUi()
+    end)
+    _autoStealModeButton.MouseButton1Click:Connect(function()
+        if _autoStealMode == "Priority" then
+            _autoStealMode = "Nearest"
+        elseif _autoStealMode == "Nearest" then
+            _autoStealMode = "Highest"
+        else
+            _autoStealMode = "Priority"
+        end
+        _autoStealManualTargetUid = nil
+        _autoStealRefreshUi()
+    end)
+    _autoStealMinimizeButton.MouseButton1Click:Connect(function()
+        _autoStealMinimized = not _autoStealMinimized
+        _autoStealApplyCompactState()
+    end)
+    _autoStealApplyCompactState()
     _autoStealRefreshUi()
 end
 
@@ -1762,13 +1960,16 @@ local function _autoStealStartLoop()
     _autoStealLoopThread = task.spawn(function()
         while _autoStealFeatureRunning and _autoStealGui and _autoStealGui.Parent do
             task.wait(0.35)
-            local target = _autoStealEnabled and _autoStealPickTarget(_autoStealGetPets()) or nil
+            local pets = _autoStealGetPets()
+            local target = _autoStealEnabled and _autoStealPickTarget(pets) or nil
+            _autoStealCurrentTargetUid = target and target.uid or nil
             if _autoStealTargetLabel then _autoStealTargetLabel.Text = target and ("Objetivo: " .. target.name) or "Objetivo: Ninguno" end
             if target then
                 local prompt = _autoStealFindPrompt(target.plot, target.slot)
                 if prompt and prompt.Parent and prompt.Enabled then _autoStealExecute(prompt) end
             end
             _autoStealUpdateVisuals(target)
+            _autoStealUpdateTopList(pets)
         end
         _autoStealLoopThread = nil
     end)
@@ -1782,6 +1983,8 @@ local function _setAutoStealFeature(state)
     else
         _autoStealFeatureRunning = false
         _autoStealEnabled = false
+        _autoStealManualTargetUid = nil
+        _autoStealCurrentTargetUid = nil
         _autoStealRefreshUi()
         _autoStealClearVisuals()
         if _autoStealGui then _autoStealGui.Enabled = false end
@@ -2518,7 +2721,7 @@ do
     local playerName = (LocalPlayer and LocalPlayer.Name) or "Usuario"
     ShowNotification(
         "KYN HUB",
-        ("KYN HUB CARGADO. Bienvenido, %s. Ejecutor: %s | Dispositivo: %s"):format(playerName, executorName, deviceType),
+        ("Bienvenido %s | %s | %s"):format(playerName, executorName, deviceType),
         THEME.Accent
     )
 end
