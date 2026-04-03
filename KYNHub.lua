@@ -41,6 +41,36 @@ if game.PlaceId ~= ALLOWED_PLACE_ID then
     return
 end
 
+local function _resolveGuiParent()
+    local parent = CoreGui
+
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            parent = hui
+        end
+    end
+
+    if not parent then
+        local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        parent = pg or CoreGui
+    end
+
+    return parent
+end
+
+local function _protectGui(guiObj)
+    if type(syn) == "table" and type(syn.protect_gui) == "function" then
+        pcall(function()
+            syn.protect_gui(guiObj)
+        end)
+    elseif type(protectgui) == "function" then
+        pcall(function()
+            protectgui(guiObj)
+        end)
+    end
+end
+
 --// ======= SETTINGS PERSISTENTES =======
 local CONFIG_FILE = "KYNHub_Settings.json"
 local SETTINGS = {
@@ -208,7 +238,13 @@ if OLD then OLD:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name = "KYNHubGUI"
 gui.ResetOnSpawn = false
-gui.Parent = CoreGui
+_protectGui(gui)
+local parentOk = pcall(function()
+    gui.Parent = _resolveGuiParent()
+end)
+if not parentOk then
+    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
@@ -522,7 +558,9 @@ local function createTab(name)
     tabs[name] = tab
     return tab
 end
-createTab("Main") createTab("Visual") createTab("Misc")
+createTab("Main")
+createTab("Visual")
+createTab("Misc")
 
 local function setActiveTab(name)
     for tabName, tab in pairs(tabs) do tab.Visible = (tabName == name) end
@@ -760,18 +798,36 @@ local function _espPlayerUpdate(player)
         local lbl = Instance.new("TextLabel"); lbl.Name="Label"; lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1; lbl.TextColor3=Color3.fromRGB(0,255,255); lbl.TextStrokeTransparency=0; lbl.Font=Enum.Font.SourceSansBold; lbl.TextScaled=true; lbl.Parent=bb
     end
     bb.Adornee = hrp
-    local lbl = bb:FindFirstChild("Label") if lbl then lbl.Text=player.Name end
+    local lbl = bb:FindFirstChild("Label")
+    if lbl then
+        lbl.Text = player.Name
+    end
 end
-local function _espPlayerClear() if _espPlayerFolder then for _, v in pairs(_espPlayerFolder:GetChildren()) do v:Destroy() end end end
+local function _espPlayerClear()
+    if _espPlayerFolder then
+        for _, v in pairs(_espPlayerFolder:GetChildren()) do
+            v:Destroy()
+        end
+    end
+end
 Players.PlayerRemoving:Connect(function(player)
     if not _espPlayerFolder then return end
-    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB") if bb then bb:Destroy() end
-    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL") if hl then hl:Destroy() end
+    local bb = _espPlayerFolder:FindFirstChild(player.Name.."_BB")
+    if bb then
+        bb:Destroy()
+    end
+    local hl = _espPlayerFolder:FindFirstChild(player.Name.."_HL")
+    if hl then
+        hl:Destroy()
+    end
 end)
 
 local _espBaseEnabled, _espBaseOwnPos = false, nil
 local function _espBaseGetOwnPos()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return nil end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return nil
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local sign=plot:FindFirstChild("PlotSign"); local base=plot:FindFirstChild("DeliveryHitbox")
         if sign and sign:FindFirstChild("YourBase") and sign.YourBase.Enabled and base then return base.Position end
@@ -779,8 +835,14 @@ local function _espBaseGetOwnPos()
     return nil
 end
 local function _espBaseUpdate(plot)
-    local purchases = plot:FindFirstChild("Purchases") if not purchases then return end
-    local plotBlock = purchases:FindFirstChild("PlotBlock") if not plotBlock or not plotBlock:FindFirstChild("Main") then return end
+    local purchases = plot:FindFirstChild("Purchases")
+    if not purchases then
+        return
+    end
+    local plotBlock = purchases:FindFirstChild("PlotBlock")
+    if not plotBlock or not plotBlock:FindFirstChild("Main") then
+        return
+    end
     local main = plotBlock.Main
     local remainingTimeGui = main:FindFirstChild("BillboardGui") and main.BillboardGui:FindFirstChild("RemainingTime")
     local base = plot:FindFirstChild("DeliveryHitbox")
@@ -805,10 +867,21 @@ local function _espBaseUpdate(plot)
     end
 end
 local function _espBaseClear()
-    local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+    local Plots = Workspace:FindFirstChild("Plots")
+    if not Plots then
+        return
+    end
     for _, plot in ipairs(Plots:GetChildren()) do
         local purchases = plot:FindFirstChild("Purchases")
-        if purchases then local pb = purchases:FindFirstChild("PlotBlock"); if pb and pb:FindFirstChild("Main") then local bb = pb.Main:FindFirstChild("KYN_Base_BB"); if bb then bb:Destroy() end end end
+        if purchases then
+            local pb = purchases:FindFirstChild("PlotBlock")
+            if pb and pb:FindFirstChild("Main") then
+                local bb = pb.Main:FindFirstChild("KYN_Base_BB")
+                if bb then
+                    bb:Destroy()
+                end
+            end
+        end
     end
 end
 
@@ -846,8 +919,14 @@ local function _espStealersClearAll()
     for _, player in ipairs(Players:GetPlayers()) do
         local char = player.Character
         if char then
-            local hl = char:FindFirstChild("KYN_StealerHL") if hl then hl:Destroy() end
-            local root = char:FindFirstChild("HumanoidRootPart") if root and root:FindFirstChild("KYN_StealerBB") then root.KYN_StealerBB:Destroy() end
+            local hl = char:FindFirstChild("KYN_StealerHL")
+            if hl then
+                hl:Destroy()
+            end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root and root:FindFirstChild("KYN_StealerBB") then
+                root.KYN_StealerBB:Destroy()
+            end
         end
     end
 end
@@ -856,7 +935,10 @@ local _xrayEnabled, _xrayConn = false, nil
 local function _xrayStart()
     if _xrayConn then _xrayConn:Disconnect() end
     _xrayConn = RunService.Heartbeat:Connect(function()
-        local Plots = Workspace:FindFirstChild("Plots") if not Plots then return end
+        local Plots = Workspace:FindFirstChild("Plots")
+        if not Plots then
+            return
+        end
         for _, Plot in ipairs(Plots:GetChildren()) do
             if Plot:IsA("Model") and Plot:FindFirstChild("Decorations") then
                 for _, Part in ipairs(Plot.Decorations:GetDescendants()) do if Part:IsA("BasePart") then Part.Transparency = 0.8 end end
