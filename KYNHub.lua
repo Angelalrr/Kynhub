@@ -1370,8 +1370,6 @@ local function _freezeTrack(track, shouldFreeze)
         pcall(function() track:AdjustSpeed(original) end)
         _freezeTrackSpeeds[track] = nil
     end
-    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
-    anim.AnimationId = ""
 end
 
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
