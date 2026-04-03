@@ -266,6 +266,27 @@ local function _bindGuiPosPersistence(key, frame)
     end)
 end
 
+local function _ensureGuiOnScreen(key, frame, fallback)
+    if not frame then return end
+    task.defer(function()
+        task.wait()
+        if not (frame and frame.Parent) then return end
+        local camera = Workspace.CurrentCamera
+        local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+        local absPos = frame.AbsolutePosition
+        local absSize = frame.AbsoluteSize
+        local isOffScreen =
+            absPos.X > viewport.X or
+            absPos.Y > viewport.Y or
+            (absPos.X + absSize.X) < 24 or
+            (absPos.Y + absSize.Y) < 24
+        if isOffScreen and fallback then
+            frame.Position = fallback
+            _saveGuiPos(key, frame)
+        end
+    end)
+end
+
 loadSettings()
 
 local function _getExecutorName()
@@ -367,6 +388,7 @@ btnDragFrame.Active = true
 btnDragFrame.Draggable = true
 btnDragFrame.Parent = gui
 _bindGuiPosPersistence("OpenButton", btnDragFrame)
+_ensureGuiOnScreen("OpenButton", btnDragFrame, UDim2.new(0, 20, 0.2, 0))
 
 local toggleBtn = Instance.new("ImageButton")
 toggleBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -410,6 +432,7 @@ cloneDragFrame.Draggable = true
 cloneDragFrame.Parent = gui
 cloneDragFrame.Visible = SETTINGS.ShowAutoCloneButton
 _bindGuiPosPersistence("CloneButton", cloneDragFrame)
+_ensureGuiOnScreen("CloneButton", cloneDragFrame, UDim2.new(1, -74, 0.45, 0))
 
 local cloneQuickBtn = Instance.new("TextButton")
 cloneQuickBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -466,6 +489,7 @@ mainDragFrame.Draggable = true
 mainDragFrame.Visible = true
 mainDragFrame.Parent = gui
 _bindGuiPosPersistence("MainPanel", mainDragFrame)
+_ensureGuiOnScreen("MainPanel", mainDragFrame, UDim2.new(0.5, -135, 0.5, -150))
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(1, 0, 1, 0)
