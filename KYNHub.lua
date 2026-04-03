@@ -155,44 +155,14 @@ local LocalPlayer = Players.LocalPlayer
 local ALLOWED_PLACE_ID = 109983668079237
 
 if game.PlaceId ~= ALLOWED_PLACE_ID then
-    warn("[KYN Hub] Script bloqueado: solo funciona en PlaceId " .. tostring(ALLOWED_PLACE_ID))
-    return
-end
-
-local function _resolveGuiParent()
-    local parent = CoreGui
-
-    if type(gethui) == "function" then
-        local ok, hui = pcall(gethui)
-        if ok and typeof(hui) == "Instance" then
-            parent = hui
-        end
-    end
-
-    if not parent then
-        local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        parent = pg or CoreGui
-    end
-
-    return parent
-end
-
-local function _protectGui(guiObj)
-    if type(syn) == "table" and type(syn.protect_gui) == "function" then
-        pcall(function()
-            syn.protect_gui(guiObj)
-        end)
-    elseif type(protectgui) == "function" then
-        pcall(function()
-            protectgui(guiObj)
-        end)
-    end
+    warn("[KYN Hub] PlaceId distinto al recomendado (" .. tostring(ALLOWED_PLACE_ID) .. "). Ejecutando en modo compatible.")
 end
 
 --// ======= SETTINGS PERSISTENTES =======
 local CONFIG_FILE = "KYNHub_Settings.json"
 local SETTINGS = {
     AutoDesync = false,
+    AutoSteal = false,
     AutoDesyncAutoActivate = false,
     ESPJugadores = false,
     ESPBaseTime = false,
@@ -341,21 +311,43 @@ local function _safeFireSignal(signalObj)
     return false
 end
 
+local function _resolveGuiParent()
+    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+    local parent = playerGui
+    pcall(function()
+        parent = CoreGui
+    end)
+    return parent or playerGui
+end
+
+local function _createScreenGui(name)
+    local sg = Instance.new("ScreenGui")
+    sg.Name = name
+    sg.ResetOnSpawn = false
+    local parent = _resolveGuiParent()
+    pcall(function()
+        sg.Parent = parent
+    end)
+    if not sg.Parent then
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui")
+        sg.Parent = playerGui
+    end
+    return sg
+end
+
+task.spawn(function()
+    task.wait(1)
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = _getExecutorName()
+    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
+end)
+
 -- Limpiar GUI antigua
-local OLD = CoreGui:FindFirstChild("KYNHubGUI")
+local OLD = CoreGui:FindFirstChild("KYNHubGUI") or ((LocalPlayer:FindFirstChildOfClass("PlayerGui")) and LocalPlayer.PlayerGui:FindFirstChild("KYNHubGUI"))
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
-local gui = Instance.new("ScreenGui")
-gui.Name = "KYNHubGUI"
-gui.ResetOnSpawn = false
-_protectGui(gui)
-local parentOk = pcall(function()
-    gui.Parent = _resolveGuiParent()
-end)
-if not parentOk then
-    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+local gui = _createScreenGui("KYNHubGUI")
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
@@ -1348,6 +1340,7 @@ local function _freezeTrack(track, shouldFreeze)
         _freezeTrackSpeeds[track] = nil
     end
 end
+
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
     if not animator then return end
     for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
@@ -1539,6 +1532,220 @@ local function _antiTorretStop()
     _antiTorretTarget = nil
 end
 
+-- Auto Steal (simple)
+local _autoStealEnabled = false
+local _autoStealMode = "Priority"
+local _autoStealGui, _autoStealFrame = nil, nil
+local _autoStealTargetLabel, _autoStealMainButton, _autoStealModeButton = nil, nil, nil
+local _autoStealBeam, _autoStealAtt0, _autoStealAtt1, _autoStealBillboard = nil, nil, nil, nil
+local _autoStealLoopThread, _autoStealDeps = nil, nil
+local _autoStealFeatureRunning = false
+local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
+
+local function _autoStealEnsureDeps()
+    if _autoStealDeps then return true end
+    local ok, data = pcall(function()
+        local Packages = ReplicatedStorage:WaitForChild("Packages")
+        local Datas = ReplicatedStorage:WaitForChild("Datas")
+        local Shared = ReplicatedStorage:WaitForChild("Shared")
+        local Utils = ReplicatedStorage:WaitForChild("Utils")
+        return {
+            Synchronizer = require(Packages:WaitForChild("Synchronizer")),
+            AnimalsData = require(Datas:WaitForChild("Animals")),
+            AnimalsShared = require(Shared:WaitForChild("Animals")),
+            NumberUtils = require(Utils:WaitForChild("NumberUtils"))
+        }
+    end)
+    if ok then _autoStealDeps = data end
+    return ok
+end
+
+local function _autoStealFormatMoney(v)
+    if not _autoStealEnsureDeps() then return "$0/s" end
+    local ok, s = pcall(function() return _autoStealDeps.NumberUtils:ToString(v) end)
+    return ok and ("$"..s.."/s") or ("$"..tostring(v).."/s")
+end
+
+local function _autoStealGetTargetPart(plotName, slot)
+    local plot = Workspace:FindFirstChild("Plots") and Workspace.Plots:FindFirstChild(plotName)
+    local pod = plot and plot:FindFirstChild("AnimalPodiums") and plot.AnimalPodiums:FindFirstChild(tostring(slot))
+    return pod and pod:FindFirstChild("Base") and pod.Base:FindFirstChild("Spawn") or nil
+end
+
+local function _autoStealFindPrompt(plotName, slot)
+    local spawn = _autoStealGetTargetPart(plotName, slot)
+    local att = spawn and spawn:FindFirstChild("PromptAttachment")
+    return att and att:FindFirstChildWhichIsA("ProximityPrompt") or nil
+end
+
+local function _autoStealExecute(prompt)
+    local old = prompt.HoldDuration
+    prompt.HoldDuration = 0
+    if fireproximityprompt then fireproximityprompt(prompt) else prompt:InputHoldBegin(); task.wait(0.05); prompt:InputHoldEnd() end
+    task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
+end
+
+local function _autoStealGetPets()
+    if not _autoStealEnsureDeps() then return {} end
+    local pets, plots = {}, Workspace:FindFirstChild("Plots")
+    if not plots then return pets end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    for _, plot in ipairs(plots:GetChildren()) do
+        local channel = _autoStealDeps.Synchronizer:Get(plot.Name)
+        if channel then
+            local owner = channel:Get("Owner")
+            local isMine = (typeof(owner) == "Instance" and owner == LocalPlayer) or (typeof(owner) == "table" and owner.UserId == LocalPlayer.UserId)
+            if not isMine then
+                local animalList = channel:Get("AnimalList")
+                if animalList then
+                    for slot, data in pairs(animalList) do
+                        if type(data) == "table" then
+                            local aName = data.Index
+                            local info = _autoStealDeps.AnimalsData[aName]
+                            local display = info and info.DisplayName or aName
+                            local gen = _autoStealDeps.AnimalsShared:GetGeneration(aName, data.Mutation, data.Traits, nil)
+                            local dist = math.huge
+                            if hrp then pcall(function() dist = (hrp.Position - plot.AnimalPodiums[tostring(slot)].Base.Spawn.Position).Magnitude end) end
+                            local rank = 999
+                            for i, p in ipairs(_AUTO_STEAL_PRIORITY) do if display:lower() == p:lower() then rank = i break end end
+                            table.insert(pets, {plot = plot.Name, slot = tostring(slot), name = display, genValue = gen, genText = _autoStealFormatMoney(gen), dist = dist, pRank = rank})
+                        end
+                    end
+                end
+            end
+        end
+    end
+    table.sort(pets, function(a,b) if a.pRank ~= b.pRank then return a.pRank < b.pRank end return a.genValue > b.genValue end)
+    return pets
+end
+
+local function _autoStealPickTarget(pets)
+    if #pets == 0 then return nil end
+    if _autoStealMode == "Nearest" then table.sort(pets, function(a,b) return a.dist < b.dist end); return pets[1] end
+    if _autoStealMode == "Highest" then table.sort(pets, function(a,b) return a.genValue > b.genValue end); return pets[1] end
+    return pets[1]
+end
+
+local function _autoStealClearVisuals()
+    if _autoStealBeam then _autoStealBeam:Destroy(); _autoStealBeam = nil end
+    if _autoStealAtt0 then _autoStealAtt0:Destroy(); _autoStealAtt0 = nil end
+    if _autoStealAtt1 then _autoStealAtt1:Destroy(); _autoStealAtt1 = nil end
+    if _autoStealBillboard then _autoStealBillboard:Destroy(); _autoStealBillboard = nil end
+end
+
+local function _autoStealUpdateVisuals(target)
+    if not _autoStealEnabled or not target then _autoStealClearVisuals() return end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local targetPart = _autoStealGetTargetPart(target.plot, target.slot)
+    if not hrp or not targetPart then _autoStealClearVisuals() return end
+    if not _autoStealAtt0 or _autoStealAtt0.Parent ~= hrp then if _autoStealAtt0 then _autoStealAtt0:Destroy() end; _autoStealAtt0 = Instance.new("Attachment", hrp) end
+    if not _autoStealAtt1 or _autoStealAtt1.Parent ~= targetPart then if _autoStealAtt1 then _autoStealAtt1:Destroy() end; _autoStealAtt1 = Instance.new("Attachment", targetPart) end
+    if not _autoStealBeam then
+        _autoStealBeam = Instance.new("Beam")
+        _autoStealBeam.FaceCamera = true
+        _autoStealBeam.Width0 = 0.45
+        _autoStealBeam.Width1 = 0.45
+        _autoStealBeam.Color = ColorSequence.new(THEME.Accent)
+        _autoStealBeam.Transparency = NumberSequence.new(0.3)
+        _autoStealBeam.Parent = Workspace
+    end
+    _autoStealBeam.Attachment0 = _autoStealAtt0
+    _autoStealBeam.Attachment1 = _autoStealAtt1
+end
+
+local function _autoStealRefreshUi()
+    if _autoStealMainButton then
+        _autoStealMainButton.Text = _autoStealEnabled and "AUTO STEAL: ON" or "AUTO STEAL: OFF"
+        _autoStealMainButton.BackgroundColor3 = _autoStealEnabled and Color3.fromRGB(30, 150, 90) or THEME.Danger
+    end
+    if _autoStealModeButton then _autoStealModeButton.Text = "Modo: " .. string.upper(_autoStealMode) end
+end
+
+local function _autoStealBuildGui()
+    if _autoStealGui then pcall(function() _autoStealGui:Destroy() end) end
+    _autoStealGui = _createScreenGui("KYN_AutoStealGUI")
+    _autoStealFrame = Instance.new("Frame")
+    _autoStealFrame.Size = UDim2.new(0, 230, 0, 120)
+    _autoStealFrame.Position = _loadGuiPos("AutoStealPanel", UDim2.new(0.05, 0, 0.35, 0))
+    _autoStealFrame.BackgroundColor3 = THEME.FrameBg
+    _autoStealFrame.BorderSizePixel = 0
+    _autoStealFrame.Active = true
+    _autoStealFrame.Draggable = true
+    _autoStealFrame.Parent = _autoStealGui
+    _bindGuiPosPersistence("AutoStealPanel", _autoStealFrame)
+    Instance.new("UICorner", _autoStealFrame).CornerRadius = UDim.new(0, 10)
+    local s = Instance.new("UIStroke", _autoStealFrame); s.Color = THEME.Accent; s.Thickness = 1.3
+    local title = Instance.new("TextLabel", _autoStealFrame)
+    title.Size = UDim2.new(1, -10, 0, 24)
+    title.Position = UDim2.new(0, 8, 0, 4)
+    title.BackgroundTransparency = 1
+    title.Text = "⚡ KYN HUB — AUTO STEAL"
+    title.TextColor3 = THEME.TitleText
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 12
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    _autoStealTargetLabel = Instance.new("TextLabel", _autoStealFrame)
+    _autoStealTargetLabel.Size = UDim2.new(1, -10, 0, 20)
+    _autoStealTargetLabel.Position = UDim2.new(0, 8, 0, 28)
+    _autoStealTargetLabel.BackgroundTransparency = 1
+    _autoStealTargetLabel.Text = "Objetivo: Ninguno"
+    _autoStealTargetLabel.TextColor3 = THEME.Accent
+    _autoStealTargetLabel.Font = Enum.Font.GothamMedium
+    _autoStealTargetLabel.TextSize = 11
+    _autoStealTargetLabel.TextXAlignment = Enum.TextXAlignment.Left
+    _autoStealMainButton = Instance.new("TextButton", _autoStealFrame)
+    _autoStealMainButton.Size = UDim2.new(1, -16, 0, 34)
+    _autoStealMainButton.Position = UDim2.new(0, 8, 0, 52)
+    _autoStealMainButton.Font = Enum.Font.GothamBold
+    _autoStealMainButton.TextSize = 12
+    _autoStealMainButton.TextColor3 = Color3.new(1, 1, 1)
+    _autoStealMainButton.AutoButtonColor = false
+    Instance.new("UICorner", _autoStealMainButton).CornerRadius = UDim.new(0, 7)
+    _autoStealModeButton = Instance.new("TextButton", _autoStealFrame)
+    _autoStealModeButton.Size = UDim2.new(1, -16, 0, 24)
+    _autoStealModeButton.Position = UDim2.new(0, 8, 0, 90)
+    _autoStealModeButton.BackgroundColor3 = THEME.FrameBg2
+    _autoStealModeButton.Font = Enum.Font.GothamBold
+    _autoStealModeButton.TextSize = 11
+    _autoStealModeButton.TextColor3 = THEME.TextLight
+    Instance.new("UICorner", _autoStealModeButton).CornerRadius = UDim.new(0, 6)
+    _autoStealMainButton.MouseButton1Click:Connect(function() _autoStealEnabled = not _autoStealEnabled _autoStealRefreshUi() end)
+    _autoStealModeButton.MouseButton1Click:Connect(function() if _autoStealMode == "Priority" then _autoStealMode = "Nearest" elseif _autoStealMode == "Nearest" then _autoStealMode = "Highest" else _autoStealMode = "Priority" end _autoStealRefreshUi() end)
+    _autoStealRefreshUi()
+end
+
+local function _autoStealStartLoop()
+    if _autoStealLoopThread then return end
+    _autoStealFeatureRunning = true
+    _autoStealLoopThread = task.spawn(function()
+        while _autoStealFeatureRunning and _autoStealGui and _autoStealGui.Parent do
+            task.wait(0.35)
+            local target = _autoStealEnabled and _autoStealPickTarget(_autoStealGetPets()) or nil
+            if _autoStealTargetLabel then _autoStealTargetLabel.Text = target and ("Objetivo: " .. target.name) or "Objetivo: Ninguno" end
+            if target then
+                local prompt = _autoStealFindPrompt(target.plot, target.slot)
+                if prompt and prompt.Parent and prompt.Enabled then _autoStealExecute(prompt) end
+            end
+            _autoStealUpdateVisuals(target)
+        end
+        _autoStealLoopThread = nil
+    end)
+end
+
+local function _setAutoStealFeature(state)
+    if state then
+        if not _autoStealGui then _autoStealBuildGui() end
+        if _autoStealGui then _autoStealGui.Enabled = true end
+        _autoStealStartLoop()
+    else
+        _autoStealFeatureRunning = false
+        _autoStealEnabled = false
+        _autoStealRefreshUi()
+        _autoStealClearVisuals()
+        if _autoStealGui then _autoStealGui.Enabled = false end
+    end
+end
+
 -- Anti Bee & Disco
 local _antiBeeDiscoEnabled = false
 local _antiBeeDiscoConns = {}
@@ -1602,7 +1809,7 @@ _desyncHighlight.Name = "KYN_RubberbandHighlight"
 _desyncHighlight.FillTransparency = 0.5
 _desyncHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 _desyncHighlight.Enabled = false
-_desyncHighlight.Parent = CoreGui
+_desyncHighlight.Parent = _resolveGuiParent()
 
 local function _desyncSetButtonUI()
     if not _desyncToggleButton then return end
@@ -1659,6 +1866,7 @@ local function _desyncEnsureStealLoop()
         end
     end)
 end
+
 local function _desyncCreateServerGhost(character)
     if _desyncServerGhost then _desyncServerGhost:Destroy() end
     _desyncServerGhost = Instance.new("Part")
@@ -1698,6 +1906,7 @@ local function _desyncCreateServerGhost(character)
     _desyncHighlight.Adornee = _desyncServerGhost
     _desyncHighlight.Enabled = true
 end
+
 local function _desyncUpdateHighlight()
     if not _desyncIsActive or not _desyncServerGhost then return end
     local char = LocalPlayer.Character
@@ -1860,10 +2069,7 @@ end
 
 local function _buildDesyncPanel()
     if _desyncGui then pcall(function() _desyncGui:Destroy() end) end
-    _desyncGui = Instance.new("ScreenGui")
-    _desyncGui.Name = "KYN_DesyncGUI"
-    _desyncGui.ResetOnSpawn = false
-    _desyncGui.Parent = CoreGui
+    _desyncGui = _createScreenGui("KYN_DesyncGUI")
 
     _desyncPanel = Instance.new("Frame")
     _desyncPanel.Name = "KYN_DesyncPanel"
@@ -2134,7 +2340,14 @@ if LocalPlayer.Character and _arEnabled and _antiKnockbackController then
 end
 
 -- REGISTRAR FEATURES
-_G.KYNAddLabel("Main", "Auto Steal  —  [Próximamente]")
+_G.KYNAddToggle("Main", {
+    Name = "Auto Steal",
+    Default = SETTINGS.AutoSteal,
+    Callback = function(state)
+        setSetting("AutoSteal", state)
+        _setAutoStealFeature(state)
+    end
+})
 _G.KYNAddToggle("Main", {
     Name = "Auto Desync",
     Default = SETTINGS.AutoDesync,
