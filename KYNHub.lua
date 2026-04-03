@@ -31,6 +31,7 @@ local Workspace         = game:GetService("Workspace")
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
+local StarterGui        = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local ALLOWED_PLACE_ID = 109983668079237
@@ -139,6 +140,65 @@ local function _bindGuiPosPersistence(key, frame)
 end
 
 loadSettings()
+
+local function _getExecutorName()
+    local candidates = {
+        identifyexecutor,
+        getexecutorname,
+        getexecutor,
+        get_exploit_name
+    }
+    for _, fn in ipairs(candidates) do
+        if type(fn) == "function" then
+            local ok, result = pcall(fn)
+            if ok and type(result) == "string" and result ~= "" then
+                return result
+            end
+        end
+    end
+    return "Executor desconocido"
+end
+
+local function _notify(title, text, duration)
+    local ok = pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 6
+        })
+    end)
+    if not ok then
+        print(("[KYN Hub] %s - %s"):format(title, text))
+    end
+end
+
+local function _safeFireSignal(signalObj)
+    if not signalObj then return false end
+    if firesignal then
+        local ok = pcall(function() firesignal(signalObj) end)
+        if ok then return true end
+    end
+    if getconnections then
+        local ok = pcall(function()
+            for _, conn in ipairs(getconnections(signalObj)) do
+                if conn.Fire then
+                    conn:Fire()
+                elseif conn.Function then
+                    conn.Function()
+                end
+            end
+        end)
+        if ok then return true end
+    end
+    return false
+end
+
+task.spawn(function()
+    task.wait(1)
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = _getExecutorName()
+    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
+end)
 
 -- Limpiar GUI antigua
 local OLD = CoreGui:FindFirstChild("KYNHubGUI")
@@ -1071,6 +1131,7 @@ local function _freezeStopWalkTracks(humanoid)
         if trackName:find("walk") or trackName:find("run") then
             pcall(function() track:Stop(0) end)
         end
+<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
 end
 
@@ -1091,6 +1152,28 @@ local function _freezeTrack(track, shouldFreeze)
     end
 end
 
+=======
+    end
+end
+
+local function _freezeTrack(track, shouldFreeze)
+    if not track then return end
+    if shouldFreeze then
+        if _freezeTrackSpeeds[track] == nil then
+            local original = 1
+            pcall(function() original = track.Speed end)
+            _freezeTrackSpeeds[track] = original
+        end
+        pcall(function() track:AdjustSpeed(0) end)
+    else
+        local original = _freezeTrackSpeeds[track]
+        if original == nil then original = 1 end
+        pcall(function() track:AdjustSpeed(original) end)
+        _freezeTrackSpeeds[track] = nil
+    end
+end
+
+>>>>>>> main
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
     if not animator then return end
     for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
@@ -1365,6 +1448,7 @@ local function _desyncUpdateStatusUI()
     end
     if _desyncStatusCircle then
         _desyncStatusCircle.BackgroundColor3 = _desyncIsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
+<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
     if _desyncAutoToggleButton then
         _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
@@ -1376,6 +1460,19 @@ local function _desyncUpdateStealUI()
     if _desyncStealSpeedLabel then
         _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
     end
+=======
+    end
+    if _desyncAutoToggleButton then
+        _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
+        _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
+    end
+end
+
+local function _desyncUpdateStealUI()
+    if _desyncStealSpeedLabel then
+        _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
+    end
+>>>>>>> main
     local percent = (_desyncStealSpeed - _desyncStealMin) / (_desyncStealMax - _desyncStealMin)
     if _desyncStealSliderFill then _desyncStealSliderFill.Size = UDim2.new(percent, 0, 1, 0) end
     if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
@@ -1402,6 +1499,7 @@ local function _desyncEnsureStealLoop()
         end
     end)
 end
+<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
 
 local function _desyncCreateServerGhost(character)
     if _desyncServerGhost then _desyncServerGhost:Destroy() end
@@ -1443,6 +1541,49 @@ local function _desyncCreateServerGhost(character)
     _desyncHighlight.Enabled = true
 end
 
+=======
+
+local function _desyncCreateServerGhost(character)
+    if _desyncServerGhost then _desyncServerGhost:Destroy() end
+    _desyncServerGhost = Instance.new("Part")
+    _desyncServerGhost.Name = "KYN_DesyncedServerPosition"
+    _desyncServerGhost.Size = Vector3.new(2.5, 2.5, 2.5)
+    _desyncServerGhost.Shape = Enum.PartType.Block
+    _desyncServerGhost.Anchored = true
+    _desyncServerGhost.CanCollide = false
+    _desyncServerGhost.CanTouch = false
+    _desyncServerGhost.CanQuery = false
+    _desyncServerGhost.Material = Enum.Material.ForceField
+    _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
+    _desyncServerGhost.Transparency = 0.2
+
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp then _desyncServerGhost.CFrame = hrp.CFrame end
+
+    local bg = Instance.new("BillboardGui")
+    bg.Name = "ServerPosGui"
+    bg.Size = UDim2.new(0, 250, 0, 50)
+    bg.StudsOffset = Vector3.new(0, 2.5, 0)
+    bg.AlwaysOnTop = true
+    bg.Parent = _desyncServerGhost
+
+    local txt = Instance.new("TextLabel")
+    txt.Name = "ServerText"
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Text = "Server Position"
+    txt.TextColor3 = Color3.fromRGB(0, 200, 255)
+    txt.TextStrokeTransparency = 0.2
+    txt.Font = Enum.Font.GothamBold
+    txt.TextScaled = true
+    txt.Parent = bg
+
+    _desyncServerGhost.Parent = Workspace
+    _desyncHighlight.Adornee = _desyncServerGhost
+    _desyncHighlight.Enabled = true
+end
+
+>>>>>>> main
 local function _desyncUpdateHighlight()
     if not _desyncIsActive or not _desyncServerGhost then return end
     local char = LocalPlayer.Character
@@ -1503,6 +1644,7 @@ end
 local function _desyncApplyToClone(clone, hide)
     for _, obj in ipairs(clone:GetDescendants()) do
         _desyncSetHiddenState(obj, hide)
+<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
     end
     if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
     if hide then
@@ -1523,6 +1665,28 @@ local function _desyncGetTool()
         local tool = backpack:FindFirstChild(_desyncToolName)
         if tool and tool:IsA("Tool") then return tool end
     end
+=======
+    end
+    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
+    if hide then
+        _desyncCloneWatchConn = clone.DescendantAdded:Connect(function(obj)
+            _desyncSetHiddenState(obj, true)
+        end)
+    end
+end
+
+local function _desyncGetTool()
+    local character = LocalPlayer.Character
+    if character then
+        local tool = character:FindFirstChild(_desyncToolName)
+        if tool and tool:IsA("Tool") then return tool end
+    end
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        local tool = backpack:FindFirstChild(_desyncToolName)
+        if tool and tool:IsA("Tool") then return tool end
+    end
+>>>>>>> main
     return nil
 end
 
@@ -1560,11 +1724,15 @@ local function _desyncTriggerTeleportSafely()
         local teleportBtn = qcFrame:WaitForChild("TeleportToClone", 2)
         if teleportBtn and teleportBtn:IsA("GuiButton") then
             _desyncIgnoringTeleport = true
+<<<<<<< codex/fix-toggle-freeze-animations-functionality-r6ulls
+            _safeFireSignal(teleportBtn.MouseButton1Up)
+=======
             if getconnections then
                 for _, conn in ipairs(getconnections(teleportBtn.MouseButton1Up)) do conn:Fire() end
             elseif firesignal then
                 firesignal(teleportBtn.MouseButton1Up)
             end
+>>>>>>> main
             qcFrame.Visible = false
             task.delay(1, function() _desyncIgnoringTeleport = false end)
         end
@@ -1816,13 +1984,7 @@ local function _runAutoClone()
 
         pcall(function()
             -- Igual al comportamiento del script original: usar MouseButton1Up del botón TP.
-            if firesignal then
-                firesignal(tpButton.MouseButton1Up)
-            elseif getconnections then
-                for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do
-                    if c.Function then c.Function() end
-                end
-            elseif tpButton:IsA("GuiButton") then
+            if not _safeFireSignal(tpButton.MouseButton1Up) and tpButton:IsA("GuiButton") then
                 tpButton:Activate()
             end
         end)
