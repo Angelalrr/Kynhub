@@ -266,7 +266,7 @@ local function _bindGuiPosPersistence(key, frame)
     end)
 end
 
-local function _ensureGuiOnScreen(key, frame, fallback)
+function _ensureGuiOnScreen(key, frame, fallback)
     if not frame then return end
     task.defer(function()
         task.wait()
