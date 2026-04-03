@@ -1853,7 +1853,7 @@ _desyncHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 _desyncHighlight.Enabled = false
 _desyncHighlight.Parent = _resolveGuiParent()
 
-local function _desyncSetButtonUI()
+function _desyncSetButtonUI()
     if not _desyncToggleButton then return end
     if _desyncIsActive then
         _desyncToggleButton.Text = "DESYNC: ACTIVADO"
@@ -1864,7 +1864,7 @@ local function _desyncSetButtonUI()
     end
 end
 
-local function _desyncUpdateStatusUI()
+function _desyncUpdateStatusUI()
     if _desyncStatusLabel then
         _desyncStatusLabel.Text = _desyncIsActive and "Activador: Activado" or "Activador: Desactivado"
         _desyncStatusLabel.TextColor3 = _desyncIsActive and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(180, 180, 180)
@@ -1878,7 +1878,7 @@ local function _desyncUpdateStatusUI()
     end
 end
 
-local function _desyncUpdateStealUI()
+function _desyncUpdateStealUI()
     if _desyncStealSpeedLabel then
         _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
     end
@@ -1887,7 +1887,7 @@ local function _desyncUpdateStealUI()
     if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
 end
 
-local function _desyncEnsureStealLoop()
+function _desyncEnsureStealLoop()
     if _desyncStealConn then return end
     _desyncStealConn = RunService.Heartbeat:Connect(function()
         if not _desyncStealEnabled then return end
@@ -1909,7 +1909,7 @@ local function _desyncEnsureStealLoop()
     end)
 end
 
-local function _desyncCreateServerGhost(character)
+function _desyncCreateServerGhost(character)
     if _desyncServerGhost then _desyncServerGhost:Destroy() end
     _desyncServerGhost = Instance.new("Part")
     _desyncServerGhost.Name = "KYN_DesyncedServerPosition"
@@ -1949,7 +1949,7 @@ local function _desyncCreateServerGhost(character)
     _desyncHighlight.Enabled = true
 end
 
-local function _desyncUpdateHighlight()
+function _desyncUpdateHighlight()
     if not _desyncIsActive or not _desyncServerGhost then return end
     local char = LocalPlayer.Character
     if not char then return end
@@ -1988,7 +1988,7 @@ local function _desyncUpdateHighlight()
     end
 end
 
-local function _desyncSetHiddenState(obj, invisible)
+function _desyncSetHiddenState(obj, invisible)
     if obj.Name == "KYN_RubberbandHighlight" or obj.Name == "KYN_DesyncedServerPosition" then return end
     if obj:IsA("BasePart") then
         obj.Transparency = invisible and 1 or 0
@@ -2006,7 +2006,7 @@ local function _desyncSetHiddenState(obj, invisible)
     end
 end
 
-local function _desyncApplyToClone(clone, hide)
+function _desyncApplyToClone(clone, hide)
     for _, obj in ipairs(clone:GetDescendants()) do
         _desyncSetHiddenState(obj, hide)
     end
@@ -2018,7 +2018,7 @@ local function _desyncApplyToClone(clone, hide)
     end
 end
 
-local function _desyncGetTool()
+function _desyncGetTool()
     local character = LocalPlayer.Character
     if character then
         local tool = character:FindFirstChild(_desyncToolName)
@@ -2032,7 +2032,7 @@ local function _desyncGetTool()
     return nil
 end
 
-local function _desyncEquipAndUseTool()
+function _desyncEquipAndUseTool()
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
     local tool = _desyncGetTool()
@@ -2045,7 +2045,7 @@ local function _desyncEquipAndUseTool()
     return true
 end
 
-local function _desyncTryFindClone(timeoutSeconds)
+function _desyncTryFindClone(timeoutSeconds)
     local start = os.clock()
     while os.clock() - start < timeoutSeconds do
         local clone = Workspace:FindFirstChild(_desyncCloneName, true)
@@ -2055,7 +2055,7 @@ local function _desyncTryFindClone(timeoutSeconds)
     return nil
 end
 
-local function _desyncTriggerTeleportSafely()
+function _desyncTriggerTeleportSafely()
     pcall(function()
         local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
         if not playerGui then return end
@@ -2073,7 +2073,7 @@ local function _desyncTriggerTeleportSafely()
     end)
 end
 
-local function _desyncActivate()
+function _desyncActivate()
     local char = LocalPlayer.Character
     if not char then return end
     _desyncIsActive = true
@@ -2096,7 +2096,7 @@ local function _desyncActivate()
     end
 end
 
-local function _desyncDeactivate()
+function _desyncDeactivate()
     _desyncIsActive = false
     _desyncSetButtonUI()
     _desyncUpdateStatusUI()
@@ -2109,7 +2109,7 @@ local function _desyncDeactivate()
     if clone then _desyncApplyToClone(clone, false) end
 end
 
-local function _buildDesyncPanel()
+function _buildDesyncPanel()
     if _desyncGui then pcall(function() _desyncGui:Destroy() end) end
     _desyncGui = _createScreenGui("KYN_DesyncGUI")
 
