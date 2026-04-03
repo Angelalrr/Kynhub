@@ -152,6 +152,7 @@ local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ALLOWED_PLACE_ID = 109983668079237
 
 if game.PlaceId ~= ALLOWED_PLACE_ID then
@@ -312,12 +313,13 @@ local function _safeFireSignal(signalObj)
 end
 
 local function _resolveGuiParent()
-    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
-    local parent = playerGui
-    pcall(function()
-        parent = CoreGui
+    local canUseCoreGui = pcall(function()
+        local probe = Instance.new("ScreenGui")
+        probe.Name = "KYN_CoreGuiProbe"
+        probe.Parent = CoreGui
+        probe:Destroy()
     end)
-    return parent or playerGui
+    return canUseCoreGui and CoreGui or PlayerGui
 end
 
 local function _createScreenGui(name)
@@ -328,10 +330,7 @@ local function _createScreenGui(name)
     pcall(function()
         sg.Parent = parent
     end)
-    if not sg.Parent then
-        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui")
-        sg.Parent = playerGui
-    end
+    if not sg.Parent then sg.Parent = PlayerGui end
     return sg
 end
 
@@ -343,7 +342,7 @@ task.spawn(function()
 end)
 
 -- Limpiar GUI antigua
-local OLD = CoreGui:FindFirstChild("KYNHubGUI") or ((LocalPlayer:FindFirstChildOfClass("PlayerGui")) and LocalPlayer.PlayerGui:FindFirstChild("KYNHubGUI"))
+local OLD = CoreGui:FindFirstChild("KYNHubGUI") or PlayerGui:FindFirstChild("KYNHubGUI")
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
@@ -1339,6 +1338,8 @@ local function _freezeTrack(track, shouldFreeze)
         pcall(function() track:AdjustSpeed(original) end)
         _freezeTrackSpeeds[track] = nil
     end
+    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
+    anim.AnimationId = ""
 end
 
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
