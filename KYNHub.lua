@@ -311,6 +311,10 @@ local function _getExecutorName()
     return "Executor desconocido"
 end
 
+local _EXECUTOR_NAME = _getExecutorName()
+local _EXECUTOR_NAME_LC = string.lower(_EXECUTOR_NAME)
+local _IS_MOBILE_DEVICE = UIS.TouchEnabled and not UIS.KeyboardEnabled
+
 local function _notify(title, text, duration)
     local ok = pcall(function()
         ShowNotification(title, text, THEME.Accent)
@@ -365,9 +369,8 @@ end
 
 task.spawn(function()
     task.wait(1)
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
-    local executorName = _getExecutorName()
-    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
+    local deviceType = _IS_MOBILE_DEVICE and "Móvil" or "PC"
+    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(_EXECUTOR_NAME, deviceType), 8)
 end)
 
 -- Limpiar GUI antigua
@@ -1619,73 +1622,83 @@ local function _autoStealExecute(prompt)
     local old = prompt.HoldDuration
     prompt.HoldDuration = 0
     local executed = false
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
+    local originalCFrame = hrp and hrp.CFrame or nil
 
-    local function _markExec(ok)
-        if ok then executed = true end
+    local function _markExec(ok, result)
+        if ok and result ~= false then
+            executed = true
+        end
+        return ok and result ~= false
+    end
+
+    local function _moveNearPrompt()
+        if not (hrp and promptPart) then return false end
+        local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
+        local neededDistance = math.max(2, maxDistance - 1)
+        if (hrp.Position - promptPart.Position).Magnitude <= neededDistance then
+            return false
+        end
+        local ok = pcall(function()
+            hrp.CFrame = promptPart.CFrame + Vector3.new(0, 0, 2.5)
+        end)
+        if ok then task.wait(0.05) end
         return ok
     end
 
-    if fireproximityprompt then
+    local movedNear = _moveNearPrompt()
+
+    -- Estrategia adaptable por executor/dispositivo:
+    -- En PC forzamos múltiples métodos porque algunos executores reportan éxito pero no disparan.
+    if fireproximityprompt and not _EXECUTOR_NAME_LC:find("swift") then
         local ok = pcall(function() fireproximityprompt(prompt, 0) end)
-        _markExec(ok)
+        _markExec(ok, true)
     end
 
-    if not executed then
+    local okHold = pcall(function()
+        prompt:InputHoldBegin()
+        task.wait(math.max(0.05, old > 0 and old or 0.1))
+        prompt:InputHoldEnd()
+    end)
+    _markExec(okHold, true)
+
+    local okSignal, signalResult = pcall(function()
+        local triggerSignal = prompt.Triggered
+        if triggerSignal then
+            return _safeFireSignal(triggerSignal)
+        end
+        return false
+    end)
+    _markExec(okSignal, signalResult)
+
+    -- Fallback robusto para executores de PC.
+    if VirtualInputManager and (not _IS_MOBILE_DEVICE) then
+        local keyCode = prompt.KeyboardKeyCode
+        if keyCode == Enum.KeyCode.Unknown then
+            keyCode = Enum.KeyCode.E
+        end
+        local ok = pcall(function()
+            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+            task.wait(0.08)
+            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+        end)
+        _markExec(ok, true)
+    elseif not executed then
+        -- En móvil, como último intento si todo falló.
         local ok = pcall(function()
             prompt:InputHoldBegin()
-            task.wait(0.05)
+            task.wait(0.08)
             prompt:InputHoldEnd()
         end)
-        _markExec(ok)
+        _markExec(ok, true)
     end
 
-    if not executed then
-        local ok = pcall(function()
-            local triggerSignal = prompt.Triggered
-            if triggerSignal then
-                return _safeFireSignal(triggerSignal)
-            end
-            return false
+    if movedNear and hrp and originalCFrame then
+        pcall(function()
+            hrp.CFrame = originalCFrame
         end)
-        _markExec(ok)
-    end
-
-    -- Fallback para executores de PC sin fireproximityprompt:
-    -- acercarse al prompt y simular tecla de interacción.
-    if not executed and VirtualInputManager then
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
-        if hrp and promptPart then
-            local originalCFrame = hrp.CFrame
-            local maxDistance = tonumber(prompt.MaxActivationDistance) or 10
-            local neededDistance = math.max(2, maxDistance - 1)
-            local shouldTeleport = (hrp.Position - promptPart.Position).Magnitude > neededDistance
-
-            if shouldTeleport then
-                pcall(function()
-                    hrp.CFrame = promptPart.CFrame + Vector3.new(0, 0, 2.5)
-                end)
-                task.wait(0.05)
-            end
-
-            local keyCode = prompt.KeyboardKeyCode
-            if keyCode == Enum.KeyCode.Unknown then
-                keyCode = Enum.KeyCode.E
-            end
-            local ok = pcall(function()
-                VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-                task.wait(0.05)
-                VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-            end)
-            _markExec(ok)
-
-            if shouldTeleport then
-                pcall(function()
-                    hrp.CFrame = originalCFrame
-                end)
-            end
-        end
     end
 
     task.delay(0.1, function() if prompt and prompt.Parent then prompt.HoldDuration = old end end)
