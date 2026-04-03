@@ -31,13 +31,20 @@ local Workspace         = game:GetService("Workspace")
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
+local StarterGui        = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
+local ALLOWED_PLACE_ID = 109983668079237
+
+if game.PlaceId ~= ALLOWED_PLACE_ID then
+    warn("[KYN Hub] PlaceId distinto al recomendado (" .. tostring(ALLOWED_PLACE_ID) .. "). Ejecutando en modo compatible.")
+end
 
 --// ======= SETTINGS PERSISTENTES =======
 local CONFIG_FILE = "KYNHub_Settings.json"
 local SETTINGS = {
     AutoDesync = false,
+    AutoDesyncAutoActivate = false,
     ESPJugadores = false,
     ESPBaseTime = false,
     ESPLadrones = false,
@@ -48,6 +55,9 @@ local SETTINGS = {
     FreezeAnimaciones = false,
     AntiTorret = false,
     AntiBeeDisco = false,
+    ShowAutoCloneButton = true,
+    StealSpeedValue = 25,
+    GuiPositions = {},
 }
 
 local function saveSettings()
@@ -65,8 +75,14 @@ local function loadSettings()
             local decoded = HttpService:JSONDecode(raw)
             if type(decoded) == "table" then
                 for k, v in pairs(decoded) do
-                    if SETTINGS[k] ~= nil and type(v) == "boolean" then
-                        SETTINGS[k] = v
+                    if SETTINGS[k] ~= nil then
+                        if type(SETTINGS[k]) == "boolean" and type(v) == "boolean" then
+                            SETTINGS[k] = v
+                        elseif type(SETTINGS[k]) == "number" and type(v) == "number" then
+                            SETTINGS[k] = v
+                        elseif type(SETTINGS[k]) == "table" and type(v) == "table" then
+                            SETTINGS[k] = v
+                        end
                     end
                 end
             end
@@ -81,28 +97,150 @@ local function setSetting(key, value)
     end
 end
 
+local function setRawSetting(key, value)
+    if SETTINGS[key] ~= nil then
+        SETTINGS[key] = value
+        saveSettings()
+    end
+end
+
+local function _encodeUDim2(pos)
+    return {
+        xs = pos.X.Scale, xo = pos.X.Offset,
+        ys = pos.Y.Scale, yo = pos.Y.Offset
+    }
+end
+
+local function _decodeUDim2(data, fallback)
+    if type(data) ~= "table" then return fallback end
+    if type(data.xs) ~= "number" or type(data.xo) ~= "number" or type(data.ys) ~= "number" or type(data.yo) ~= "number" then
+        return fallback
+    end
+    return UDim2.new(data.xs, data.xo, data.ys, data.yo)
+end
+
+local function _saveGuiPos(key, frame)
+    if not (key and frame) then return end
+    SETTINGS.GuiPositions = SETTINGS.GuiPositions or {}
+    SETTINGS.GuiPositions[key] = _encodeUDim2(frame.Position)
+    saveSettings()
+end
+
+local function _loadGuiPos(key, fallback)
+    local map = SETTINGS.GuiPositions
+    return _decodeUDim2(type(map) == "table" and map[key] or nil, fallback)
+end
+
+local function _bindGuiPosPersistence(key, frame)
+    if not frame then return end
+    frame:GetPropertyChangedSignal("Position"):Connect(function()
+        _saveGuiPos(key, frame)
+    end)
+end
+
 loadSettings()
 
+local function _getExecutorName()
+    local candidates = {
+        identifyexecutor,
+        getexecutorname,
+        getexecutor,
+        get_exploit_name
+    }
+    for _, fn in ipairs(candidates) do
+        if type(fn) == "function" then
+            local ok, result = pcall(fn)
+            if ok and type(result) == "string" and result ~= "" then
+                return result
+            end
+        end
+    end
+    return "Executor desconocido"
+end
+
+local function _notify(title, text, duration)
+    local ok = pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 6
+        })
+    end)
+    if not ok then
+        print(("[KYN Hub] %s - %s"):format(title, text))
+    end
+end
+
+local function _safeFireSignal(signalObj)
+    if not signalObj then return false end
+    if firesignal then
+        local ok = pcall(function() firesignal(signalObj) end)
+        if ok then return true end
+    end
+    if getconnections then
+        local ok = pcall(function()
+            for _, conn in ipairs(getconnections(signalObj)) do
+                if conn.Fire then
+                    conn:Fire()
+                elseif conn.Function then
+                    conn.Function()
+                end
+            end
+        end)
+        if ok then return true end
+    end
+    return false
+end
+
+local function _resolveGuiParent()
+    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+    local parent = playerGui
+    pcall(function()
+        parent = CoreGui
+    end)
+    return parent or playerGui
+end
+
+local function _createScreenGui(name)
+    local sg = Instance.new("ScreenGui")
+    sg.Name = name
+    sg.ResetOnSpawn = false
+    local parent = _resolveGuiParent()
+    pcall(function()
+        sg.Parent = parent
+    end)
+    if not sg.Parent then
+        local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui")
+        sg.Parent = playerGui
+    end
+    return sg
+end
+
+task.spawn(function()
+    task.wait(1)
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = _getExecutorName()
+    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
+end)
+
 -- Limpiar GUI antigua
-local OLD = CoreGui:FindFirstChild("KYNHubGUI")
+local OLD = CoreGui:FindFirstChild("KYNHubGUI") or ((LocalPlayer:FindFirstChildOfClass("PlayerGui")) and LocalPlayer.PlayerGui:FindFirstChild("KYNHubGUI"))
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
-local gui = Instance.new("ScreenGui")
-gui.Name = "KYNHubGUI"
-gui.ResetOnSpawn = false
-gui.Parent = CoreGui
+local gui = _createScreenGui("KYNHubGUI")
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
 -- ==========================================
 local btnDragFrame = Instance.new("Frame")
 btnDragFrame.Size = UDim2.new(0, 55, 0, 55)
-btnDragFrame.Position = UDim2.new(0, 20, 0.2, 0)
+btnDragFrame.Position = _loadGuiPos("OpenButton", UDim2.new(0, 20, 0.2, 0))
 btnDragFrame.BackgroundTransparency = 1
 btnDragFrame.Active = true
 btnDragFrame.Draggable = true
 btnDragFrame.Parent = gui
+_bindGuiPosPersistence("OpenButton", btnDragFrame)
 
 local toggleBtn = Instance.new("ImageButton")
 toggleBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -139,11 +277,13 @@ end)
 -- ==========================================
 local cloneDragFrame = Instance.new("Frame")
 cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
-cloneDragFrame.Position = UDim2.new(1, -74, 0.45, 0)
+cloneDragFrame.Position = _loadGuiPos("CloneButton", UDim2.new(1, -74, 0.45, 0))
 cloneDragFrame.BackgroundTransparency = 1
 cloneDragFrame.Active = true
 cloneDragFrame.Draggable = true
 cloneDragFrame.Parent = gui
+cloneDragFrame.Visible = SETTINGS.ShowAutoCloneButton
+_bindGuiPosPersistence("CloneButton", cloneDragFrame)
 
 local cloneQuickBtn = Instance.new("TextButton")
 cloneQuickBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -160,17 +300,46 @@ local cloneQuickStroke = Instance.new("UIStroke", cloneQuickBtn)
 cloneQuickStroke.Color = THEME.Accent
 cloneQuickStroke.Thickness = 1.4
 
+do
+    local dragging = false
+    local dragInput, dragStart, startPos
+    cloneQuickBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = cloneDragFrame.Position
+            dragInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and dragInput and input == dragInput then
+            local delta = input.Position - dragStart
+            cloneDragFrame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
 -- ==========================================
 -- // MAIN GUI FRAME
 -- ==========================================
 local mainDragFrame = Instance.new("Frame")
 mainDragFrame.Size = UDim2.new(0, 270, 0, 300)
-mainDragFrame.Position = UDim2.new(0.5, -135, 0.5, -150)
+mainDragFrame.Position = _loadGuiPos("MainPanel", UDim2.new(0.5, -135, 0.5, -150))
 mainDragFrame.BackgroundTransparency = 1
 mainDragFrame.Active = true
 mainDragFrame.Draggable = true
 mainDragFrame.Visible = false
 mainDragFrame.Parent = gui
+_bindGuiPosPersistence("MainPanel", mainDragFrame)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -766,6 +935,17 @@ local function setupAntiKnockback()
         return knockoutStates[state]
     end
 
+    local function hardenHumanoid(humanoid)
+        if not humanoid then return end
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        end)
+        humanoid.PlatformStand = false
+        humanoid.Sit = false
+    end
+
     local function enableControls(player)
         pcall(function()
             local playerScripts = player:WaitForChild("PlayerScripts")
@@ -817,6 +997,7 @@ local function setupAntiKnockback()
 
         table.insert(connections, humanoid.StateChanged:Connect(function(_, newState)
             if shouldApplyAntiKnockback(humanoid) then
+                hardenHumanoid(humanoid)
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait()
                 humanoid:ChangeState(Enum.HumanoidStateType.Running)
@@ -826,6 +1007,13 @@ local function setupAntiKnockback()
                 enableControls(localPlayer)
             elseif newState == Enum.HumanoidStateType.Jumping then
                 -- no interferir con el salto normal
+            end
+        end))
+
+        table.insert(connections, humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
+            if humanoid.PlatformStand then
+                humanoid.PlatformStand = false
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
             end
         end))
 
@@ -850,6 +1038,7 @@ local function setupAntiKnockback()
         end))
 
         table.insert(connections, RunService.Heartbeat:Connect(function()
+            hardenHumanoid(humanoid)
             if shouldApplyAntiKnockback(humanoid) then
                 cleanCharacter(character, cleanBodyMovers)
                 stopKnockbackAnimations(animator)
@@ -866,6 +1055,7 @@ local function setupAntiKnockback()
         end))
 
         enableControls(localPlayer)
+        hardenHumanoid(humanoid)
         cleanCharacter(character, cleanBodyMovers)
         stopKnockbackAnimations(animator)
 
@@ -876,6 +1066,7 @@ local function setupAntiKnockback()
             animator = humanoid:WaitForChild("Animator")
             lastVelocity = Vector3.new(0, 0, 0)
             enableControls(localPlayer)
+            hardenHumanoid(humanoid)
             cleanCharacter(newCharacter, cleanBodyMovers)
             stopKnockbackAnimations(animator)
         end))
@@ -884,6 +1075,15 @@ local function setupAntiKnockback()
     local function disableAntiKnockback()
         if not isEnabled then return end
         isEnabled = false
+        pcall(function()
+            local character = Players.LocalPlayer.Character
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+            end
+        end)
         for _, connection in pairs(connections) do if connection then connection:Disconnect() end end
         connections = {}
     end
@@ -898,48 +1098,188 @@ end
 _antiKnockbackController = setupAntiKnockback()
 
 local _freezeEnabled = false
-local _freezeAnimConns = {}
+local _freezeSavedAnims = {}
+local _freezeDescendantConn = nil
+local _freezeAnimPlayedConn = nil
+local _freezeHeartbeatConn = nil
+local _freezeTrackSpeeds = setmetatable({}, {__mode = "k"})
+local _freezeAnimateStates = setmetatable({}, {__mode = "k"})
 
 local function _freezeDisconnectConns()
-    for _, c in ipairs(_freezeAnimConns) do
-        pcall(function() c:Disconnect() end)
+    if _freezeDescendantConn then
+        pcall(function() _freezeDescendantConn:Disconnect() end)
+        _freezeDescendantConn = nil
     end
-    _freezeAnimConns = {}
+    if _freezeAnimPlayedConn then
+        pcall(function() _freezeAnimPlayedConn:Disconnect() end)
+        _freezeAnimPlayedConn = nil
+    end
+    if _freezeHeartbeatConn then
+        pcall(function() _freezeHeartbeatConn:Disconnect() end)
+        _freezeHeartbeatConn = nil
+    end
 end
 
-local function _freezeApplyToAnimator(animator, freezeState)
-    if not animator then return end
-    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-        pcall(function() track:AdjustSpeed(freezeState and 0 or 1) end)
-    end
+local function _freezeIsWalkAnim(anim)
+    if not (anim and anim:IsA("Animation")) then return false end
+    local n = anim.Name:lower()
+    return n:find("walk") ~= nil or n:find("run") ~= nil
 end
 
-local function _freezeBindAnimator(animator)
-    if not animator then return end
-    _freezeDisconnectConns()
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    table.insert(_freezeAnimConns, animator.AnimationPlayed:Connect(function(track)
-        if _freezeEnabled and track then
-            pcall(function() track:AdjustSpeed(0) end)
+local function _freezeSaveAndClearAnimation(anim)
+    if not _freezeIsWalkAnim(anim) then return end
+    for _, v in ipairs(_freezeSavedAnims) do
+        if v.instance == anim then return end
+    end
+    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
+    anim.AnimationId = ""
+end
+
+local function _freezeRestoreAnimations()
+    for _, v in ipairs(_freezeSavedAnims) do
+        if v.instance and v.instance.Parent then
+            v.instance.AnimationId = v.id
         end
-    end))
+    end
+    _freezeSavedAnims = {}
+end
+
+local function _freezeStopWalkTracks(humanoid)
+    if not humanoid then return end
+    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+        local trackName = (track.Name or ""):lower()
+        if trackName:find("walk") or trackName:find("run") then
+            pcall(function() track:Stop(0) end)
+        end
+    end
+end
+
+local function _freezeTrack(track, shouldFreeze)
+    if not track then return end
+    if shouldFreeze then
+        if _freezeTrackSpeeds[track] == nil then
+            local original = 1
+            pcall(function() original = track.Speed end)
+            _freezeTrackSpeeds[track] = original
+        end
+        pcall(function() track:AdjustSpeed(0) end)
+    else
+        local original = _freezeTrackSpeeds[track]
+        if original == nil then original = 1 end
+        pcall(function() track:AdjustSpeed(original) end)
+        _freezeTrackSpeeds[track] = nil
+    end
+end
+
+local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
+    if not animator then return end
+    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+        _freezeTrack(track, shouldFreeze)
+    end
+end
+
+local function _freezeSetAnimateDisabled(character, disabledState)
+    local animate = character and character:FindFirstChild("Animate")
+    if not (animate and animate:IsA("LocalScript")) then return end
+    if disabledState then
+        if _freezeAnimateStates[animate] == nil then
+            _freezeAnimateStates[animate] = animate.Disabled
+        end
+        animate.Disabled = true
+    else
+        local prev = _freezeAnimateStates[animate]
+        if prev ~= nil then
+            animate.Disabled = prev
+            _freezeAnimateStates[animate] = nil
+        else
+            animate.Disabled = false
+        end
+    end
+end
+
+local function _freezeScanCharacter(character)
+    if not character then return end
+    local animate = character:FindFirstChild("Animate")
+    if animate then
+        local walkFolder = animate:FindFirstChild("walk")
+        local runFolder = animate:FindFirstChild("run")
+        if walkFolder then
+            local walkAnim = walkFolder:FindFirstChild("WalkAnim")
+            if walkAnim then _freezeSaveAndClearAnimation(walkAnim) end
+        end
+        if runFolder then
+            local runAnim = runFolder:FindFirstChild("RunAnim")
+            if runAnim then _freezeSaveAndClearAnimation(runAnim) end
+        end
+        for _, desc in ipairs(animate:GetDescendants()) do
+            if desc:IsA("Animation") then
+                _freezeSaveAndClearAnimation(desc)
+            end
+        end
+    end
+
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if hum then
+        _freezeStopWalkTracks(hum)
+        local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+        if animator then
+            _freezeApplyAnimatorTracks(animator, true)
+            _freezeAnimPlayedConn = animator.AnimationPlayed:Connect(function(track)
+                if not _freezeEnabled or not track then return end
+                _freezeTrack(track, true)
+                local trackName = (track.Name or ""):lower()
+                if trackName:find("walk") or trackName:find("run") then pcall(function() track:Stop(0) end) end
+            end)
+            _freezeHeartbeatConn = RunService.Heartbeat:Connect(function()
+                if _freezeEnabled then
+                    _freezeApplyAnimatorTracks(animator, true)
+                end
+            end)
+        end
+    end
+end
+
+local function _freezeBindCharacter(character)
+    if not character then return end
+    _freezeDisconnectConns()
+    _freezeScanCharacter(character)
+    _freezeDescendantConn = character.DescendantAdded:Connect(function(desc)
+        if _freezeEnabled and desc:IsA("Animation") then
+            _freezeSaveAndClearAnimation(desc)
+        end
+    end)
 end
 
 local function _setFreezeAnims(state)
     _freezeEnabled = state and true or false
     local character = LocalPlayer.Character
-    if not character then return end
-    local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
-    if not animator then return end
 
-    _freezeBindAnimator(animator)
-    _freezeApplyToAnimator(animator, _freezeEnabled)
-    if not _freezeEnabled then
+    if _freezeEnabled then
+        _freezeSavedAnims = {}
+        if character then
+            _freezeSetAnimateDisabled(character, true)
+            _freezeBindCharacter(character)
+        end
+    else
         _freezeDisconnectConns()
+        _freezeRestoreAnimations()
+        if character then _freezeSetAnimateDisabled(character, false) end
+        local hum = character and character:FindFirstChildOfClass("Humanoid")
+        _freezeStopWalkTracks(hum)
+        local animator = hum and (hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 1))
+        if animator then _freezeApplyAnimatorTracks(animator, false) end
     end
 end
+
+local function _freezeCharacterAdded(character)
+    if _freezeEnabled then
+        task.wait(0.25)
+        _freezeSetAnimateDisabled(character, true)
+        _freezeBindCharacter(character)
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(_freezeCharacterAdded)
 
 
 -- Anti Torret
@@ -1056,151 +1396,439 @@ end
 
 local _desyncLoaded = false
 local _desyncGui, _desyncPanel = nil, nil
-local _desyncTargetBtn, _desyncTargetIndicator, _desyncTargetTB = nil, nil, nil
-local _desyncActionBtn, _desyncStatusLabel, _desyncStatusCircle = nil, nil, nil
-local _desyncActionDefaultColor = THEME.AccentDark
+local _desyncToggleButton = nil
+local _desyncAutoToggleButton = nil
+local _desyncStatusLabel = nil
+local _desyncStatusCircle = nil
+local _desyncCloneWatchConn = nil
+local _desyncRubberbandLoop = nil
+local _desyncServerGhost = nil
+local _desyncWorldAddedConn = nil
+local _desyncIsActive = false
+local _desyncAutoActivate = SETTINGS.AutoDesyncAutoActivate and true or false
+local _desyncStealEnabled = true
+local _desyncStealSpeed = math.clamp(tonumber(SETTINGS.StealSpeedValue) or 25, 5, 100)
+local _desyncStealMin, _desyncStealMax = 5, 100
+local _desyncStealConn = nil
+local _desyncLastPlayerPos = nil
+local _desyncLagbackWarningEndTime = 0
+local _desyncIgnoringTeleport = false
+local _desyncToolName = "Quantum Cloner"
+local _desyncCloneName = tostring(LocalPlayer.UserId) .. "_Clone"
+local _desyncStealSpeedLabel = nil
+local _desyncStealSliderBg = nil
+local _desyncStealSliderFill = nil
+local _desyncStealSliderKnob = nil
 
-local function _desyncUpdateStatusUI()
-    if not _desyncTargetIndicator or not _desyncStatusLabel or not _desyncStatusCircle then return end
-    local ok, currentColorHex = pcall(function()
-        return _desyncTargetIndicator.BackgroundColor3:ToHex():upper()
-    end)
-    if not ok then
-        _desyncStatusLabel.Text = "Estado: Desconocido"
-        _desyncStatusLabel.TextColor3 = THEME.TextLight
-        _desyncStatusCircle.BackgroundColor3 = THEME.ToggleOffTrack
-        return
-    end
+local _desyncHighlight = Instance.new("Highlight")
+_desyncHighlight.Name = "KYN_RubberbandHighlight"
+_desyncHighlight.FillTransparency = 0.5
+_desyncHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+_desyncHighlight.Enabled = false
+_desyncHighlight.Parent = _resolveGuiParent()
 
-    if currentColorHex == "00FF78" then
-        _desyncStatusLabel.Text = "Estado: Activo"
-        _desyncStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-        _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
-    elseif currentColorHex == "28282D" then
-        _desyncStatusLabel.Text = "Estado: Desactivado"
-        _desyncStatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+local function _desyncSetButtonUI()
+    if not _desyncToggleButton then return end
+    if _desyncIsActive then
+        _desyncToggleButton.Text = "DESYNC: ACTIVADO"
+        _desyncToggleButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
     else
-        _desyncStatusLabel.Text = "Estado: Desconocido"
-        _desyncStatusLabel.TextColor3 = THEME.TextLight
-        _desyncStatusCircle.BackgroundColor3 = _desyncTargetIndicator.BackgroundColor3
+        _desyncToggleButton.Text = "DESYNC: DESACTIVADO"
+        _desyncToggleButton.BackgroundColor3 = THEME.FrameBg2
     end
 end
 
-local function _desyncSimulateClick()
-    if not _desyncTargetBtn then return end
-    pcall(function()
-        if firesignal then
-            firesignal(_desyncTargetBtn.MouseButton1Down)
-            firesignal(_desyncTargetBtn.MouseButton1Up)
-            firesignal(_desyncTargetBtn.MouseButton1Click)
-            firesignal(_desyncTargetBtn.Activated)
-        elseif getconnections then
-            for _, c in pairs(getconnections(_desyncTargetBtn.MouseButton1Click)) do
-                if c.Function then c.Function() end
+local function _desyncUpdateStatusUI()
+    if _desyncStatusLabel then
+        _desyncStatusLabel.Text = _desyncIsActive and "Activador: Activado" or "Activador: Desactivado"
+        _desyncStatusLabel.TextColor3 = _desyncIsActive and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(180, 180, 180)
+    end
+    if _desyncStatusCircle then
+        _desyncStatusCircle.BackgroundColor3 = _desyncIsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
+    end
+    if _desyncAutoToggleButton then
+        _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
+        _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
+    end
+end
+
+local function _desyncUpdateStealUI()
+    if _desyncStealSpeedLabel then
+        _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
+    end
+    local percent = (_desyncStealSpeed - _desyncStealMin) / (_desyncStealMax - _desyncStealMin)
+    if _desyncStealSliderFill then _desyncStealSliderFill.Size = UDim2.new(percent, 0, 1, 0) end
+    if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
+end
+
+local function _desyncEnsureStealLoop()
+    if _desyncStealConn then return end
+    _desyncStealConn = RunService.Heartbeat:Connect(function()
+        if not _desyncStealEnabled then return end
+        if LocalPlayer:GetAttribute("Stealing") ~= true then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hum and hrp and hum.Health > 0 then
+            local md = hum.MoveDirection
+            if md.Magnitude > 0 then
+                hrp.AssemblyLinearVelocity = Vector3.new(
+                    md.X * _desyncStealSpeed,
+                    hrp.AssemblyLinearVelocity.Y,
+                    md.Z * _desyncStealSpeed
+                )
             end
         end
     end)
 end
 
+local function _desyncCreateServerGhost(character)
+    if _desyncServerGhost then _desyncServerGhost:Destroy() end
+    _desyncServerGhost = Instance.new("Part")
+    _desyncServerGhost.Name = "KYN_DesyncedServerPosition"
+    _desyncServerGhost.Size = Vector3.new(2.5, 2.5, 2.5)
+    _desyncServerGhost.Shape = Enum.PartType.Block
+    _desyncServerGhost.Anchored = true
+    _desyncServerGhost.CanCollide = false
+    _desyncServerGhost.CanTouch = false
+    _desyncServerGhost.CanQuery = false
+    _desyncServerGhost.Material = Enum.Material.ForceField
+    _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
+    _desyncServerGhost.Transparency = 0.2
+
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp then _desyncServerGhost.CFrame = hrp.CFrame end
+
+    local bg = Instance.new("BillboardGui")
+    bg.Name = "ServerPosGui"
+    bg.Size = UDim2.new(0, 250, 0, 50)
+    bg.StudsOffset = Vector3.new(0, 2.5, 0)
+    bg.AlwaysOnTop = true
+    bg.Parent = _desyncServerGhost
+
+    local txt = Instance.new("TextLabel")
+    txt.Name = "ServerText"
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Text = "Server Position"
+    txt.TextColor3 = Color3.fromRGB(0, 200, 255)
+    txt.TextStrokeTransparency = 0.2
+    txt.Font = Enum.Font.GothamBold
+    txt.TextScaled = true
+    txt.Parent = bg
+
+    _desyncServerGhost.Parent = Workspace
+    _desyncHighlight.Adornee = _desyncServerGhost
+    _desyncHighlight.Enabled = true
+end
+
+local function _desyncUpdateHighlight()
+    if not _desyncIsActive or not _desyncServerGhost then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local realHRP = char:FindFirstChild("HumanoidRootPart")
+    if not realHRP then return end
+
+    local currentPos = realHRP.Position
+    if _desyncLastPlayerPos then
+        local distanceJump = (currentPos - _desyncLastPlayerPos).Magnitude
+        if distanceJump > 2.5 then
+            _desyncServerGhost.CFrame = realHRP.CFrame
+            if not _desyncIgnoringTeleport then
+                _desyncLagbackWarningEndTime = os.clock() + 2.5
+            end
+        end
+    end
+    _desyncLastPlayerPos = currentPos
+
+    local distFromServerPos = (currentPos - _desyncServerGhost.Position).Magnitude
+    local bg = _desyncServerGhost:FindFirstChild("ServerPosGui")
+    local txt = bg and bg:FindFirstChild("ServerText")
+    if os.clock() < _desyncLagbackWarningEndTime then
+        _desyncServerGhost.Color = Color3.fromRGB(255, 0, 0)
+        _desyncHighlight.FillColor = Color3.fromRGB(255, 0, 0)
+        if txt then
+            txt.Text = "⚠️ LAGBACK DETECTADO ⚠️"
+            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+        end
+    else
+        _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
+        _desyncHighlight.FillColor = Color3.fromRGB(0, 150, 255)
+        if txt then
+            txt.Text = string.format("Server Position\n(Distancia: %.1f studs)", distFromServerPos)
+            txt.TextColor3 = Color3.fromRGB(0, 200, 255)
+        end
+    end
+end
+
+local function _desyncSetHiddenState(obj, invisible)
+    if obj.Name == "KYN_RubberbandHighlight" or obj.Name == "KYN_DesyncedServerPosition" then return end
+    if obj:IsA("BasePart") then
+        obj.Transparency = invisible and 1 or 0
+        obj.CanCollide = not invisible
+    elseif obj:IsA("Decal") then
+        obj.Transparency = invisible and 1 or 0
+    elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
+        obj.Enabled = not invisible
+    elseif obj:IsA("Highlight") then
+        obj.Enabled = not invisible
+    elseif obj:IsA("Smoke") or obj:IsA("Fire") then
+        obj.Enabled = not invisible
+    elseif obj:IsA("ForceField") then
+        obj.Visible = not invisible
+    end
+end
+
+local function _desyncApplyToClone(clone, hide)
+    for _, obj in ipairs(clone:GetDescendants()) do
+        _desyncSetHiddenState(obj, hide)
+    end
+    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
+    if hide then
+        _desyncCloneWatchConn = clone.DescendantAdded:Connect(function(obj)
+            _desyncSetHiddenState(obj, true)
+        end)
+    end
+end
+
+local function _desyncGetTool()
+    local character = LocalPlayer.Character
+    if character then
+        local tool = character:FindFirstChild(_desyncToolName)
+        if tool and tool:IsA("Tool") then return tool end
+    end
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        local tool = backpack:FindFirstChild(_desyncToolName)
+        if tool and tool:IsA("Tool") then return tool end
+    end
+    return nil
+end
+
+local function _desyncEquipAndUseTool()
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    local tool = _desyncGetTool()
+    if not tool then return false end
+    if tool.Parent ~= character then
+        humanoid:EquipTool(tool)
+        task.wait(0.15)
+    end
+    pcall(function() tool:Activate() end)
+    return true
+end
+
+local function _desyncTryFindClone(timeoutSeconds)
+    local start = os.clock()
+    while os.clock() - start < timeoutSeconds do
+        local clone = Workspace:FindFirstChild(_desyncCloneName, true)
+        if clone and clone:IsA("Model") then return clone end
+        task.wait(0.05)
+    end
+    return nil
+end
+
+local function _desyncTriggerTeleportSafely()
+    pcall(function()
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if not playerGui then return end
+        local toolsFrames = playerGui:WaitForChild("ToolsFrames", 2)
+        if not toolsFrames then return end
+        local qcFrame = toolsFrames:WaitForChild("QuantumCloner", 2)
+        if not qcFrame then return end
+        local teleportBtn = qcFrame:WaitForChild("TeleportToClone", 2)
+        if teleportBtn and teleportBtn:IsA("GuiButton") then
+            _desyncIgnoringTeleport = true
+            _safeFireSignal(teleportBtn.MouseButton1Up)
+            qcFrame.Visible = false
+            task.delay(1, function() _desyncIgnoringTeleport = false end)
+        end
+    end)
+end
+
+local function _desyncActivate()
+    local char = LocalPlayer.Character
+    if not char then return end
+    _desyncIsActive = true
+    _desyncSetButtonUI()
+    _desyncUpdateStatusUI()
+    _desyncCreateServerGhost(char)
+    pcall(function() raknet.desync(true) end)
+    _desyncLastPlayerPos = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position or nil
+    if not _desyncRubberbandLoop then
+        _desyncRubberbandLoop = RunService.Heartbeat:Connect(_desyncUpdateHighlight)
+    end
+
+    if _desyncEquipAndUseTool() then
+        local clone = _desyncTryFindClone(2)
+        if clone then
+            _desyncApplyToClone(clone, true)
+            task.wait(0.1)
+            _desyncTriggerTeleportSafely()
+        end
+    end
+end
+
+local function _desyncDeactivate()
+    _desyncIsActive = false
+    _desyncSetButtonUI()
+    _desyncUpdateStatusUI()
+    pcall(function() raknet.desync(false) end)
+    if _desyncRubberbandLoop then _desyncRubberbandLoop:Disconnect() _desyncRubberbandLoop = nil end
+    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
+    _desyncHighlight.Enabled = false
+    if _desyncServerGhost then _desyncServerGhost:Destroy() _desyncServerGhost = nil end
+    local clone = Workspace:FindFirstChild(_desyncCloneName, true)
+    if clone then _desyncApplyToClone(clone, false) end
+end
+
 local function _buildDesyncPanel()
     if _desyncGui then pcall(function() _desyncGui:Destroy() end) end
-
-    _desyncGui = Instance.new("ScreenGui")
-    _desyncGui.Name = "KYN_DesyncGUI"
-    _desyncGui.ResetOnSpawn = false
-    _desyncGui.Parent = CoreGui
+    _desyncGui = _createScreenGui("KYN_DesyncGUI")
 
     _desyncPanel = Instance.new("Frame")
     _desyncPanel.Name = "KYN_DesyncPanel"
-    _desyncPanel.Size = UDim2.new(0, 220, 0, 165)
-    _desyncPanel.Position = UDim2.new(1, -230, 0.55, -82)
+    _desyncPanel.Size = UDim2.new(0, 250, 0, 250)
+    _desyncPanel.Position = _loadGuiPos("DesyncPanel", UDim2.new(1, -265, 0.55, -125))
     _desyncPanel.BackgroundColor3 = THEME.FrameBg
     _desyncPanel.BorderSizePixel = 0
     _desyncPanel.Active = true
     _desyncPanel.Draggable = true
     _desyncPanel.Parent = _desyncGui
+    _bindGuiPosPersistence("DesyncPanel", _desyncPanel)
     Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
     local panelStroke = Instance.new("UIStroke", _desyncPanel)
     panelStroke.Color = THEME.Accent
     panelStroke.Thickness = 1.4
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 25)
+    title.Size = UDim2.new(1, -20, 0, 25)
+    title.Position = UDim2.new(0, 10, 0, 6)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ KYN Hub — Desync"
+    title.Text = "⚡ KYN Desync"
     title.TextColor3 = THEME.TitleText
     title.Font = Enum.Font.GothamBold
-    title.TextSize = 13
+    title.TextSize = 15
+    title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = _desyncPanel
 
     _desyncStatusCircle = Instance.new("Frame")
-    _desyncStatusCircle.Size = UDim2.new(0, 14, 0, 14)
-    _desyncStatusCircle.Position = UDim2.new(0.1, 0, 0, 33)
-    _desyncStatusCircle.BackgroundColor3 = THEME.ToggleOffTrack
+    _desyncStatusCircle.Size = UDim2.new(0, 12, 0, 12)
+    _desyncStatusCircle.Position = UDim2.new(0, 12, 0, 38)
+    _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(90, 90, 95)
+    _desyncStatusCircle.BorderSizePixel = 0
     _desyncStatusCircle.Parent = _desyncPanel
     Instance.new("UICorner", _desyncStatusCircle).CornerRadius = UDim.new(1, 0)
 
     _desyncStatusLabel = Instance.new("TextLabel")
-    _desyncStatusLabel.Size = UDim2.new(0.8, -20, 0, 20)
-    _desyncStatusLabel.Position = UDim2.new(0.1, 20, 0, 30)
+    _desyncStatusLabel.Size = UDim2.new(1, -32, 0, 18)
+    _desyncStatusLabel.Position = UDim2.new(0, 30, 0, 35)
     _desyncStatusLabel.BackgroundTransparency = 1
-    _desyncStatusLabel.Text = "Estado: Calculando..."
-    _desyncStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    _desyncStatusLabel.Text = "Activador: Desactivado"
+    _desyncStatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
     _desyncStatusLabel.Font = Enum.Font.GothamMedium
     _desyncStatusLabel.TextSize = 13
     _desyncStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
     _desyncStatusLabel.Parent = _desyncPanel
 
-    local speedInput = Instance.new("TextBox")
-    speedInput.Size = UDim2.new(0.8, 0, 0, 30)
-    speedInput.Position = UDim2.new(0.1, 0, 0, 60)
-    speedInput.BackgroundColor3 = THEME.FrameBg2
-    speedInput.TextColor3 = THEME.TextLight
-    speedInput.Font = Enum.Font.GothamMedium
-    speedInput.TextSize = 14
-    speedInput.PlaceholderText = "Velocidad..."
-    speedInput.Parent = _desyncPanel
-    Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 6)
+    _desyncAutoToggleButton = Instance.new("TextButton")
+    _desyncAutoToggleButton.Size = UDim2.new(1, -20, 0, 32)
+    _desyncAutoToggleButton.Position = UDim2.new(0, 10, 0, 58)
+    _desyncAutoToggleButton.BackgroundColor3 = THEME.FrameBg2
+    _desyncAutoToggleButton.TextColor3 = THEME.TextLight
+    _desyncAutoToggleButton.Font = Enum.Font.GothamBold
+    _desyncAutoToggleButton.TextSize = 13
+    _desyncAutoToggleButton.AutoButtonColor = true
+    _desyncAutoToggleButton.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncAutoToggleButton).CornerRadius = UDim.new(0, 8)
 
-    _desyncActionBtn = Instance.new("TextButton")
-    _desyncActionBtn.Size = UDim2.new(0.8, 0, 0, 45)
-    _desyncActionBtn.Position = UDim2.new(0.1, 0, 0, 100)
-    _desyncActionBtn.BackgroundColor3 = _desyncActionDefaultColor
-    _desyncActionBtn.Text = "DESYNC"
-    _desyncActionBtn.TextColor3 = THEME.TextLight
-    _desyncActionBtn.Font = Enum.Font.GothamBold
-    _desyncActionBtn.TextSize = 15
-    _desyncActionBtn.AutoButtonColor = false
-    _desyncActionBtn.Parent = _desyncPanel
-    Instance.new("UICorner", _desyncActionBtn).CornerRadius = UDim.new(0, 6)
+    _desyncToggleButton = Instance.new("TextButton")
+    _desyncToggleButton.Size = UDim2.new(1, -20, 0, 45)
+    _desyncToggleButton.Position = UDim2.new(0, 10, 0, 98)
+    _desyncToggleButton.BackgroundColor3 = THEME.FrameBg2
+    _desyncToggleButton.TextColor3 = Color3.new(1, 1, 1)
+    _desyncToggleButton.Font = Enum.Font.GothamBold
+    _desyncToggleButton.TextScaled = true
+    _desyncToggleButton.AutoButtonColor = true
+    _desyncToggleButton.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncToggleButton).CornerRadius = UDim.new(0, 8)
 
-    if _desyncTargetTB and _desyncTargetTB.Text ~= "" then
-        pcall(function() speedInput.Text = _desyncTargetTB.Text end)
-    end
-    speedInput:GetPropertyChangedSignal("Text"):Connect(function()
-        pcall(function()
-            if _desyncTargetTB then
-                _desyncTargetTB.Text = speedInput.Text
-                if firesignal then firesignal(_desyncTargetTB.FocusLost, true) end
-            end
-        end)
+    _desyncStealSpeedLabel = Instance.new("TextLabel")
+    _desyncStealSpeedLabel.Size = UDim2.new(1, -20, 0, 20)
+    _desyncStealSpeedLabel.Position = UDim2.new(0, 10, 0, 152)
+    _desyncStealSpeedLabel.BackgroundTransparency = 1
+    _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
+    _desyncStealSpeedLabel.TextColor3 = THEME.TextLight
+    _desyncStealSpeedLabel.Font = Enum.Font.GothamBold
+    _desyncStealSpeedLabel.TextSize = 13
+    _desyncStealSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    _desyncStealSpeedLabel.Parent = _desyncPanel
+
+    _desyncStealSliderBg = Instance.new("Frame")
+    _desyncStealSliderBg.Size = UDim2.new(1, -20, 0, 6)
+    _desyncStealSliderBg.Position = UDim2.new(0, 10, 0, 178)
+    _desyncStealSliderBg.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
+    _desyncStealSliderBg.BorderSizePixel = 0
+    _desyncStealSliderBg.Parent = _desyncPanel
+    Instance.new("UICorner", _desyncStealSliderBg).CornerRadius = UDim.new(1, 0)
+
+    _desyncStealSliderFill = Instance.new("Frame")
+    _desyncStealSliderFill.Size = UDim2.new(0, 0, 1, 0)
+    _desyncStealSliderFill.BackgroundColor3 = THEME.Accent
+    _desyncStealSliderFill.BorderSizePixel = 0
+    _desyncStealSliderFill.Parent = _desyncStealSliderBg
+    Instance.new("UICorner", _desyncStealSliderFill).CornerRadius = UDim.new(1, 0)
+
+    _desyncStealSliderKnob = Instance.new("Frame")
+    _desyncStealSliderKnob.Size = UDim2.new(0, 14, 0, 14)
+    _desyncStealSliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    _desyncStealSliderKnob.Position = UDim2.new(0, 0, 0.5, 0)
+    _desyncStealSliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _desyncStealSliderKnob.Parent = _desyncStealSliderBg
+    Instance.new("UICorner", _desyncStealSliderKnob).CornerRadius = UDim.new(1, 0)
+
+    _desyncToggleButton.MouseButton1Click:Connect(function()
+        if _desyncIsActive then _desyncDeactivate() else _desyncActivate() end
     end)
-
-    _desyncActionBtn.MouseButton1Click:Connect(function()
-        if not _desyncTargetBtn then return end
-        _desyncActionBtn.BackgroundColor3 = THEME.Accent
-        _desyncSimulateClick()
-        task.wait(0.1)
-        if _desyncActionBtn then
-            _desyncActionBtn.BackgroundColor3 = _desyncActionDefaultColor
+    _desyncAutoToggleButton.MouseButton1Click:Connect(function()
+        _desyncAutoActivate = not _desyncAutoActivate
+        setSetting("AutoDesyncAutoActivate", _desyncAutoActivate)
+        _desyncUpdateStatusUI()
+        if _desyncAutoActivate and not _desyncIsActive then
+            _desyncActivate()
         end
     end)
-
-    if _desyncTargetIndicator then
-        _desyncTargetIndicator:GetPropertyChangedSignal("BackgroundColor3"):Connect(_desyncUpdateStatusUI)
+    do
+        local sliderDragging = false
+        local function updateSlider(input)
+            if not _desyncStealSliderBg then return end
+            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, _desyncStealSliderBg.AbsoluteSize.X)
+            local percent = pos / _desyncStealSliderBg.AbsoluteSize.X
+            _desyncStealSpeed = math.floor(_desyncStealMin + (percent * (_desyncStealMax - _desyncStealMin)))
+            setRawSetting("StealSpeedValue", _desyncStealSpeed)
+            _desyncUpdateStealUI()
+        end
+        _desyncStealSliderBg.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliderDragging = true
+                updateSlider(input)
+            end
+        end)
+        UIS.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                sliderDragging = false
+            end
+        end)
+        UIS.InputChanged:Connect(function(input)
+            if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                updateSlider(input)
+            end
+        end)
     end
+    _desyncSetButtonUI()
     _desyncUpdateStatusUI()
+    _desyncUpdateStealUI()
 end
 
 local function _loadDesync()
@@ -1209,72 +1837,21 @@ local function _loadDesync()
         return
     end
     _desyncLoaded = true
-
-    task.spawn(function()
-        local RobloxGui = CoreGui:WaitForChild("RobloxGui")
-
-        local trampa
-        trampa = RobloxGui.ChildAdded:Connect(function(child)
-            if child.Name == "ChocolaDesync" then
-                if child:IsA("ScreenGui") then child.Enabled = false end
-                child.ChildAdded:Connect(function(subChild)
-                    if subChild.Name == "Frame" then
-                        subChild.Position = UDim2.new(9999, 0, 9999, 0)
-                        subChild.Visible = false
-                    end
-                end)
-                local existingFrame = child:FindFirstChild("Frame")
-                if existingFrame then
-                    existingFrame.Position = UDim2.new(9999, 0, 9999, 0)
-                    existingFrame.Visible = false
-                end
+    _buildDesyncPanel()
+    _desyncEnsureStealLoop()
+    if _desyncAutoActivate and not _desyncIsActive then
+        task.spawn(function()
+            task.wait(0.2)
+            _desyncActivate()
+        end)
+    end
+    if not _desyncWorldAddedConn then
+        _desyncWorldAddedConn = Workspace.ChildAdded:Connect(function(child)
+            if _desyncIsActive and child.Name == _desyncCloneName and child:IsA("Model") then
+                _desyncApplyToClone(child, true)
             end
         end)
-
-        print("[KYN Hub] Cargando script de Chocola (GUI original oculta)...")
-        local success = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/chocolascript-glitch/Chocola.script/refs/heads/main/Chocola-Desync-no-auto-grab.lua"))()
-        end)
-        if not success then
-            warn("[KYN Hub] La GUI de Chocola no cargó.")
-            _desyncLoaded = false
-            if trampa then trampa:Disconnect() end
-            return
-        end
-
-        local ChocolaDesync = RobloxGui:WaitForChild("ChocolaDesync", 10)
-        if not ChocolaDesync then
-            warn("[KYN Hub] La GUI de Chocola no cargó.")
-            _desyncLoaded = false
-            if trampa then trampa:Disconnect() end
-            return
-        end
-
-        local mainFrame = ChocolaDesync:WaitForChild("Frame", 5)
-        if not mainFrame then
-            _desyncLoaded = false
-            if trampa then trampa:Disconnect() end
-            return
-        end
-        task.wait(1)
-
-        local ok = pcall(function()
-            local seccion4 = mainFrame:GetChildren()[4]
-            _desyncTargetBtn = seccion4.TextButton
-            _desyncTargetIndicator = _desyncTargetBtn.Frame
-            _desyncTargetTB = seccion4.Frame.Frame.TextBox
-        end)
-        if not ok then
-            warn("[KYN Hub] No se pudieron enlazar controles de Chocola.")
-            _desyncLoaded = false
-            if trampa then trampa:Disconnect() end
-            return
-        end
-
-        if trampa then trampa:Disconnect() end
-        _buildDesyncPanel()
-        print("[KYN Hub] Controlador Desync listo.")
-    end)
+    end
 end
 
 
@@ -1312,13 +1889,7 @@ local function _runAutoClone()
 
         pcall(function()
             -- Igual al comportamiento del script original: usar MouseButton1Up del botón TP.
-            if firesignal then
-                firesignal(tpButton.MouseButton1Up)
-            elseif getconnections then
-                for _, c in pairs(getconnections(tpButton.MouseButton1Up)) do
-                    if c.Function then c.Function() end
-                end
-            elseif tpButton:IsA("GuiButton") then
+            if not _safeFireSignal(tpButton.MouseButton1Up) and tpButton:IsA("GuiButton") then
                 tpButton:Activate()
             end
         end)
@@ -1377,7 +1948,6 @@ end)
 _espPlayerInit()
 LocalPlayer.CharacterAdded:Connect(function(char)
     _ijCharacter = char
-    if _freezeEnabled then task.wait(0.5); _setFreezeAnims(true) end
     if _arEnabled and _antiKnockbackController then task.wait(0.2); _antiKnockbackController.Enable() end
     if _antiTorretEnabled then _antiTorretStart() else _antiTorretStop() end
 end)
@@ -1395,12 +1965,20 @@ _G.KYNAddToggle("Main", {
         if state then
             _loadDesync()
         else
+            _desyncDeactivate()
             if _desyncGui then _desyncGui.Enabled = false end
             if _desyncPanel then _desyncPanel.Visible = false end
         end
     end
 })
-_G.KYNAddButton("Main", {Name = "Clone & TP", Callback = function() _runAutoClone() end})
+_G.KYNAddToggle("Main", {
+    Name = "Mostrar botón Auto Clone",
+    Default = SETTINGS.ShowAutoCloneButton,
+    Callback = function(state)
+        setSetting("ShowAutoCloneButton", state)
+        cloneDragFrame.Visible = state
+    end
+})
 
 _G.KYNAddToggle("Visual", {
     Name = "ESP Jugadores",
