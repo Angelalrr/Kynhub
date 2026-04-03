@@ -463,7 +463,7 @@ mainDragFrame.Position = _loadGuiPos("MainPanel", UDim2.new(0.5, -135, 0.5, -150
 mainDragFrame.BackgroundTransparency = 1
 mainDragFrame.Active = true
 mainDragFrame.Draggable = true
-mainDragFrame.Visible = false
+mainDragFrame.Visible = true
 mainDragFrame.Parent = gui
 _bindGuiPosPersistence("MainPanel", mainDragFrame)
 
@@ -474,7 +474,7 @@ mainFrame.Parent = mainDragFrame
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
 local uiScale = Instance.new("UIScale")
-uiScale.Scale = 0
+uiScale.Scale = 1
 uiScale.Parent = mainDragFrame
 
 local mainStroke = Instance.new("UIStroke")
@@ -835,7 +835,7 @@ RunService.RenderStepped:Connect(function()
     mainFrame.Position = UDim2.new(0, 0, 0, wave)
 end)
 
-local isOpen, isAnimating = false, false
+local isOpen, isAnimating = true, false
 local function toggleMenu()
     if isAnimating then return end
     isAnimating = true
