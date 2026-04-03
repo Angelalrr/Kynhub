@@ -1798,7 +1798,7 @@ local function _autoStealUpdateVisuals(target)
         _autoStealBillboard.StudsOffset = Vector3.new(0, 3.5, 0)
         _autoStealBillboard.AlwaysOnTop = true
         _autoStealBillboard.Adornee = targetPart
-        _autoStealBillboard.Parent = CoreGui
+        _autoStealBillboard.Parent = _resolveGuiParent()
 
         local bg = Instance.new("Frame", _autoStealBillboard)
         bg.Size = UDim2.new(1, 0, 1, 0)
@@ -2054,6 +2054,7 @@ local function _setAutoStealFeature(state)
         _autoStealStartLoop()
     else
         _autoStealFeatureRunning = false
+        _autoStealLoopThread = nil
         _autoStealEnabled = false
         _autoStealManualTargetUid = nil
         _autoStealCurrentTargetUid = nil
@@ -2071,7 +2072,14 @@ local _antiBeeBlacklist = {
     "BlurEffect","ColorCorrectionEffect","BloomEffect","SunRaysEffect","DepthOfFieldEffect","Atmosphere","Sky","Smoke","ParticleEmitter","Beam","Trail","Highlight","PostEffect","SurfaceAppearance","Fire","Sparkles","Explosion","PointLight","SpotLight","SurfaceLight","Shadows","Blur","Fog","ColorGradingEffect","ToneMappingEffect","VignetteEffect","GodRays","Glare","ChromaticAberrationEffect","DistortionEffect","LensFlare","SunFlare","LightInfluence","AmbientOcclusionEffect","RefractionEffect","HeatDistortion","GlitchEffect","ScreenSpaceReflection","MotionBlur","VolumetricLight","RainEffect","SnowEffect","LightningEffect","NeonGlow","ContrastCorrection","ShadowMap","Bloom","Clouds","FogVolume","WaterEffect","WindEffect","PixelateEffect","FilmGrainEffect","CRTShader","NightVisionEffect","InfraredEffect","HazeEffect","ColorBalanceEffect","DynamicLight","AmbientEffect","ScreenDistortion","ScanlineEffect","UnderwaterEffect","ThermalVision","ShockwaveEffect","FlashEffect","ExplosionLight","VFXPart","GlitchScreen","ScreenFlash","OverlayEffect","ShadowEffect","GhostEffect","FogEmitter","WindEmitter","HeatWave","SunGlow","ColorOverlay","VisionDistort","EchoEffect","ScreenOverlay","RenderEffect","VisualEffect","LightingEffect","CameraEffect","WeatherEffect","SmokeTrail","FireTrail","NeonEffect","RefractionLayer","PostProcessingEffect","VisualNoise","ScreenNoise"
 }
 local function _antiBeeIsBlacklisted(obj)
-    for _, name in ipairs(_antiBeeBlacklist) do if obj:IsA(name) then return true end end
+    for _, name in ipairs(_antiBeeBlacklist) do
+        local ok, isClass = pcall(function()
+            return obj:IsA(name)
+        end)
+        if ok and isClass then
+            return true
+        end
+    end
     return false
 end
 local function _antiBeeClearEffects()
@@ -2504,8 +2512,9 @@ function _buildDesyncPanel()
         local sliderDragging = false
         local function updateSlider(input)
             if not _desyncStealSliderBg then return end
-            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, _desyncStealSliderBg.AbsoluteSize.X)
-            local percent = pos / _desyncStealSliderBg.AbsoluteSize.X
+            local sliderWidth = math.max(_desyncStealSliderBg.AbsoluteSize.X, 1)
+            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, sliderWidth)
+            local percent = pos / sliderWidth
             _desyncStealSpeed = math.floor(_desyncStealMin + (percent * (_desyncStealMax - _desyncStealMin)))
             setRawSetting("StealSpeedValue", _desyncStealSpeed)
             _desyncUpdateStealUI()
@@ -2535,6 +2544,7 @@ end
 function _loadDesync()
     if _desyncLoaded then
         if _desyncGui then _desyncGui.Enabled = true end
+        if _desyncPanel then _desyncPanel.Visible = true end
         return
     end
     _desyncLoaded = true
