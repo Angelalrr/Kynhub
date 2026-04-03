@@ -20,6 +20,117 @@ local THEME = {
     Danger         = Color3.fromRGB(255, 60, 80)
 }
 
+function ShowNotification(titulo, mensaje, color)
+    local tweenService = game:GetService("TweenService")
+    local players = game:GetService("Players")
+    local coreGui = game:GetService("CoreGui")
+
+    local parentGui = coreGui
+    if type(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok and typeof(hui) == "Instance" then
+            parentGui = hui
+        end
+    end
+    if not parentGui then
+        local lp = players.LocalPlayer
+        parentGui = lp and lp:FindFirstChildOfClass("PlayerGui") or coreGui
+    end
+
+    local host = parentGui:FindFirstChild("KYNHubNotifyHost")
+    if not host then
+        host = Instance.new("ScreenGui")
+        host.Name = "KYNHubNotifyHost"
+        host.ResetOnSpawn = false
+        host.IgnoreGuiInset = true
+        host.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        host.Parent = parentGui
+    end
+
+    local container = host:FindFirstChild("Container")
+    if not container then
+        container = Instance.new("Frame")
+        container.Name = "Container"
+        container.Size = UDim2.new(0, 320, 1, -110)
+        container.Position = UDim2.new(1, -335, 0, 85)
+        container.BackgroundTransparency = 1
+        container.Parent = host
+
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 8)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+        layout.VerticalAlignment = Enum.VerticalAlignment.Top
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = container
+    end
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 72)
+    card.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+    card.BackgroundTransparency = 0.08
+    card.ClipsDescendants = true
+    card.Parent = container
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(40, 44, 58)
+    stroke.Thickness = 1
+    stroke.Parent = card
+
+    local side = Instance.new("Frame")
+    side.Size = UDim2.new(0, 5, 1, 0)
+    side.BackgroundColor3 = THEME.Accent
+    side.BorderSizePixel = 0
+    side.Parent = card
+
+    local title = Instance.new("TextLabel")
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, 14, 0, 8)
+    title.Size = UDim2.new(1, -22, 0, 22)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextColor3 = color or THEME.Accent
+    title.Text = tostring(titulo or "KYN HUB")
+    title.Parent = card
+
+    local body = Instance.new("TextLabel")
+    body.BackgroundTransparency = 1
+    body.Position = UDim2.new(0, 14, 0, 28)
+    body.Size = UDim2.new(1, -22, 1, -34)
+    body.Font = Enum.Font.Gotham
+    body.TextSize = 12
+    body.TextWrapped = true
+    body.TextXAlignment = Enum.TextXAlignment.Left
+    body.TextYAlignment = Enum.TextYAlignment.Top
+    body.TextColor3 = Color3.fromRGB(235, 240, 250)
+    body.Text = tostring(mensaje or "")
+    body.Parent = card
+
+    card.AnchorPoint = Vector2.new(1, 0)
+    card.Position = UDim2.new(1, 36, 0, 0)
+    card.BackgroundTransparency = 1
+    side.BackgroundTransparency = 1
+
+    tweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(1, 0, 0, 0),
+        BackgroundTransparency = 0.08
+    }):Play()
+    tweenService:Create(side, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
+
+    task.delay(4, function()
+        if not card or not card.Parent then return end
+        local out = tweenService:Create(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 36, 0, 0),
+            BackgroundTransparency = 1
+        })
+        tweenService:Create(side, TweenInfo.new(0.22), {BackgroundTransparency = 1}):Play()
+        out:Play()
+        out.Completed:Wait()
+        if card then card:Destroy() end
+    end)
+end
+
 --// ======= SERVICES =======
 local CoreGui           = game:GetService("CoreGui")
 local TweenService      = game:GetService("TweenService")
@@ -641,6 +752,11 @@ _G.KYNAddToggle = function(tabName, data)
         state = not state
         apply(true)
         if data.Callback then pcall(data.Callback, state) end
+        if state then
+            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " ACTIVADO", Color3.fromRGB(80, 255, 120))
+        else
+            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " DESACTIVADO", Color3.fromRGB(255, 90, 90))
+        end
     end)
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleHover}):Play()
@@ -2133,3 +2249,21 @@ _G.KYNAddToggle("Misc", {
 })
 
 print("[KYN Hub] Cargado correctamente. RightShift para abrir/cerrar.")
+
+do
+    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
+    local executorName = "Executor desconocido"
+    if type(identifyexecutor) == "function" then
+        local ok, result = pcall(identifyexecutor)
+        if ok and type(result) == "string" and result ~= "" then
+            executorName = result
+        end
+    end
+
+    local playerName = (LocalPlayer and LocalPlayer.Name) or "Usuario"
+    ShowNotification(
+        "KYN HUB",
+        ("KYN HUB CARGADO. Bienvenido, %s. Ejecutor: %s | Dispositivo: %s"):format(playerName, executorName, deviceType),
+        THEME.Accent
+    )
+end
