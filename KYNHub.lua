@@ -152,6 +152,14 @@ local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+    LocalPlayer = Players.LocalPlayer
+end
+if not LocalPlayer then
+    warn("[KYN Hub] No se pudo obtener LocalPlayer.")
+    return
+end
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ALLOWED_PLACE_ID = 109983668079237
 
@@ -1338,8 +1346,6 @@ local function _freezeTrack(track, shouldFreeze)
         pcall(function() track:AdjustSpeed(original) end)
         _freezeTrackSpeeds[track] = nil
     end
-    table.insert(_freezeSavedAnims, {instance = anim, id = anim.AnimationId})
-    anim.AnimationId = ""
 end
 
 local function _freezeApplyAnimatorTracks(animator, shouldFreeze)
