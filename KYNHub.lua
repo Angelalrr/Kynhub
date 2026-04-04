@@ -1704,6 +1704,7 @@ local _autoStealFeatureRunning = false
 local _autoStealManualTargetUid = nil
 local _autoStealCurrentTargetUid = nil
 local _autoStealMinimized = false
+local _autoStealCachedUidStr = ""
 local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
 
 local function _autoStealEnsureDeps()
@@ -1904,66 +1905,118 @@ end
 
 local function _autoStealUpdateTopList(sortedPets)
     if not _autoStealListScroll then return end
-    for _, child in ipairs(_autoStealListScroll:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
-    end
 
     local count = math.min(#sortedPets, 10)
+
+    -- Build UID string to detect if the pet list actually changed
+    local uidParts = {}
     for i = 1, count do
-        local pet = sortedPets[i]
-        local isTarget = _autoStealEnabled and (pet.uid == _autoStealCurrentTargetUid)
+        uidParts[i] = sortedPets[i].uid
+    end
+    local newUidStr = table.concat(uidParts, "|")
+    local needsRebuild = (newUidStr ~= _autoStealCachedUidStr)
 
-        local item = Instance.new("TextButton", _autoStealListScroll)
-        item.Size = UDim2.new(1, -6, 0, 26)
-        item.BackgroundColor3 = isTarget and Color3.fromRGB(30, 60, 45) or Color3.fromRGB(30, 32, 38)
-        item.Text = ""
-        item.AutoButtonColor = false
-        item.BorderSizePixel = 0
-        Instance.new("UICorner", item).CornerRadius = UDim.new(0, 4)
-
-        item.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                _autoStealManualTargetUid = pet.uid
-                _autoStealMode = "Manual"
-                _autoStealRefreshUi()
-            end
-        end)
-
-        if isTarget then
-            local stroke = Instance.new("UIStroke", item)
-            stroke.Color = Color3.fromRGB(0, 255, 100)
-            stroke.Thickness = 1
+    if needsRebuild then
+        -- Pet list changed: full rebuild
+        _autoStealCachedUidStr = newUidStr
+        for _, child in ipairs(_autoStealListScroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
         end
 
-        local rankLbl = Instance.new("TextLabel", item)
-        rankLbl.Size = UDim2.new(0, 24, 1, 0)
-        rankLbl.Position = UDim2.new(0, 3, 0, 0)
-        rankLbl.BackgroundTransparency = 1
-        rankLbl.Text = "#" .. i
-        rankLbl.TextColor3 = isTarget and Color3.fromRGB(0, 255, 100) or THEME.Accent
-        rankLbl.Font = Enum.Font.GothamBold
-        rankLbl.TextSize = 11
+        for i = 1, count do
+            local pet = sortedPets[i]
+            local isTarget = _autoStealEnabled and (pet.uid == _autoStealCurrentTargetUid)
 
-        local nameLbl = Instance.new("TextLabel", item)
-        nameLbl.Size = UDim2.new(1, -90, 1, 0)
-        nameLbl.Position = UDim2.new(0, 28, 0, 0)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Text = pet.name
-        nameLbl.TextColor3 = THEME.TextLight
-        nameLbl.Font = Enum.Font.Gotham
-        nameLbl.TextSize = 10
-        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+            local item = Instance.new("TextButton", _autoStealListScroll)
+            item.Name = "PetItem_" .. i
+            item.Size = UDim2.new(1, -6, 0, 26)
+            item.BackgroundColor3 = isTarget and Color3.fromRGB(30, 60, 45) or Color3.fromRGB(30, 32, 38)
+            item.Text = ""
+            item.AutoButtonColor = false
+            item.BorderSizePixel = 0
+            item.LayoutOrder = i
+            Instance.new("UICorner", item).CornerRadius = UDim.new(0, 4)
 
-        local valLbl = Instance.new("TextLabel", item)
-        valLbl.Size = UDim2.new(0, 58, 1, 0)
-        valLbl.Position = UDim2.new(1, -60, 0, 0)
-        valLbl.BackgroundTransparency = 1
-        valLbl.Text = pet.genText
-        valLbl.TextColor3 = Color3.fromRGB(180, 180, 180)
-        valLbl.Font = Enum.Font.GothamBold
-        valLbl.TextSize = 10
-        valLbl.TextXAlignment = Enum.TextXAlignment.Right
+            -- Store uid so click handler survives rebuilds
+            local petUid = pet.uid
+            item.MouseButton1Click:Connect(function()
+                _autoStealManualTargetUid = petUid
+                _autoStealMode = "Manual"
+            end)
+
+            if isTarget then
+                local stroke = Instance.new("UIStroke", item)
+                stroke.Name = "TargetStroke"
+                stroke.Color = Color3.fromRGB(0, 255, 100)
+                stroke.Thickness = 1
+            end
+
+            local rankLbl = Instance.new("TextLabel", item)
+            rankLbl.Name = "RankLbl"
+            rankLbl.Size = UDim2.new(0, 24, 1, 0)
+            rankLbl.Position = UDim2.new(0, 3, 0, 0)
+            rankLbl.BackgroundTransparency = 1
+            rankLbl.Text = "#" .. i
+            rankLbl.TextColor3 = isTarget and Color3.fromRGB(0, 255, 100) or THEME.Accent
+            rankLbl.Font = Enum.Font.GothamBold
+            rankLbl.TextSize = 11
+            rankLbl.Active = false
+
+            local nameLbl = Instance.new("TextLabel", item)
+            nameLbl.Name = "NameLbl"
+            nameLbl.Size = UDim2.new(1, -90, 1, 0)
+            nameLbl.Position = UDim2.new(0, 28, 0, 0)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Text = pet.name
+            nameLbl.TextColor3 = THEME.TextLight
+            nameLbl.Font = Enum.Font.Gotham
+            nameLbl.TextSize = 10
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+            nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLbl.Active = false
+
+            local valLbl = Instance.new("TextLabel", item)
+            valLbl.Name = "ValLbl"
+            valLbl.Size = UDim2.new(0, 58, 1, 0)
+            valLbl.Position = UDim2.new(1, -60, 0, 0)
+            valLbl.BackgroundTransparency = 1
+            valLbl.Text = pet.genText
+            valLbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+            valLbl.Font = Enum.Font.GothamBold
+            valLbl.TextSize = 10
+            valLbl.TextXAlignment = Enum.TextXAlignment.Right
+            valLbl.Active = false
+        end
+    else
+        -- Same pets, just update highlights and values in-place
+        for i = 1, count do
+            local pet = sortedPets[i]
+            local isTarget = _autoStealEnabled and (pet.uid == _autoStealCurrentTargetUid)
+            local item = _autoStealListScroll:FindFirstChild("PetItem_" .. i)
+            if item then
+                item.BackgroundColor3 = isTarget and Color3.fromRGB(30, 60, 45) or Color3.fromRGB(30, 32, 38)
+                -- Update stroke
+                local stroke = item:FindFirstChild("TargetStroke")
+                if isTarget and not stroke then
+                    stroke = Instance.new("UIStroke", item)
+                    stroke.Name = "TargetStroke"
+                    stroke.Color = Color3.fromRGB(0, 255, 100)
+                    stroke.Thickness = 1
+                elseif not isTarget and stroke then
+                    stroke:Destroy()
+                end
+                -- Update rank color
+                local rankLbl = item:FindFirstChild("RankLbl")
+                if rankLbl then
+                    rankLbl.TextColor3 = isTarget and Color3.fromRGB(0, 255, 100) or THEME.Accent
+                end
+                -- Update value text
+                local valLbl = item:FindFirstChild("ValLbl")
+                if valLbl then
+                    valLbl.Text = pet.genText
+                end
+            end
+        end
     end
 
     _autoStealListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 31)
@@ -2088,6 +2141,7 @@ local function _setAutoStealFeature(state)
         _autoStealEnabled = false
         _autoStealManualTargetUid = nil
         _autoStealCurrentTargetUid = nil
+        _autoStealCachedUidStr = ""
         _autoStealRefreshUi()
         _autoStealClearVisuals()
         if _autoStealGui then _autoStealGui.Enabled = false end
