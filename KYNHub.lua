@@ -2586,15 +2586,27 @@ local _floatTargetHeight = 0
 local _floatRiseSpeed = 15
 local _floatStudsToRise = 9
 
+local function _safeTweenButtonColor(button, color)
+    if not button or not color then return end
+    pcall(function()
+        TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = color}):Play()
+    end)
+end
+
 local function _stopFloat()
     _floatEnabled = false
-    if _floatLoopConnection then _floatLoopConnection:Disconnect() _floatLoopConnection = nil end
+    if _floatLoopConnection and typeof(_floatLoopConnection) == "RBXScriptConnection" then
+        _floatLoopConnection:Disconnect()
+    end
+    _floatLoopConnection = nil
     if _floatActiveLV then _floatActiveLV:Destroy() _floatActiveLV = nil end
     if _floatActiveAttachment then _floatActiveAttachment:Destroy() _floatActiveAttachment = nil end
-    TweenService:Create(floatQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.AccentDark}):Play()
+    _safeTweenButtonColor(floatQuickBtn, THEME.AccentDark)
 end
 
 local function _startFloat()
+    _stopFloat()
+
     local character = LocalPlayer.Character
     if not character then return end
 
@@ -2604,7 +2616,7 @@ local function _startFloat()
 
     _floatTargetHeight = root.Position.Y + _floatStudsToRise
     _floatEnabled = true
-    TweenService:Create(floatQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
+    _safeTweenButtonColor(floatQuickBtn, THEME.Accent)
 
     _floatActiveAttachment = Instance.new("Attachment")
     _floatActiveAttachment.Parent = root
@@ -2651,10 +2663,16 @@ cloneQuickBtn.MouseButton1Click:Connect(function()
 end)
 
 floatQuickBtn.MouseButton1Click:Connect(function()
-    if _floatEnabled then
+    local ok, err = pcall(function()
+        if _floatEnabled then
+            _stopFloat()
+        else
+            _startFloat()
+        end
+    end)
+    if not ok then
+        warn("[KYN Hub][Float] Error al alternar Float:", err)
         _stopFloat()
-    else
-        _startFloat()
     end
 end)
 
