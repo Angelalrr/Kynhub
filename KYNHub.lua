@@ -477,59 +477,6 @@ do
     end)
 end
 
-local floatDragFrame = Instance.new("Frame")
-floatDragFrame.Size = UDim2.new(0, 56, 0, 56)
-floatDragFrame.Position = _loadGuiPos("FloatButton", UDim2.new(1, -74, 0.56, 0))
-floatDragFrame.BackgroundTransparency = 1
-floatDragFrame.Active = true
-floatDragFrame.Draggable = true
-floatDragFrame.Parent = gui
-_bindGuiPosPersistence("FloatButton", floatDragFrame)
-_ensureGuiOnScreen("FloatButton", floatDragFrame, UDim2.new(1, -74, 0.56, 0))
-
-local floatQuickBtn = Instance.new("TextButton")
-floatQuickBtn.Size = UDim2.new(1, 0, 1, 0)
-floatQuickBtn.BackgroundColor3 = THEME.AccentDark
-floatQuickBtn.TextColor3 = THEME.TextLight
-floatQuickBtn.Font = Enum.Font.GothamBold
-floatQuickBtn.TextSize = 10
-floatQuickBtn.Text = "Float"
-floatQuickBtn.AutoButtonColor = false
-floatQuickBtn.Parent = floatDragFrame
-Instance.new("UICorner", floatQuickBtn).CornerRadius = UDim.new(1, 0)
-
-local floatQuickStroke = Instance.new("UIStroke", floatQuickBtn)
-floatQuickStroke.Color = THEME.Accent
-floatQuickStroke.Thickness = 1.4
-
-do
-    local dragging = false
-    local dragInput, dragStart, startPos
-    floatQuickBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = floatDragFrame.Position
-            dragInput = input
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    dragInput = nil
-                end
-            end)
-        end
-    end)
-    UIS.InputChanged:Connect(function(input)
-        if dragging and dragInput and input == dragInput then
-            local delta = input.Position - dragStart
-            floatDragFrame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-end
-
 -- ==========================================
 -- // MAIN GUI FRAME
 -- ==========================================
@@ -2538,79 +2485,6 @@ end
 
 
 
-local _floatEnabled = false
-local _floatConn = nil
-local _floatLV = nil
-local _floatAttachment = nil
-local _floatTargetY = nil
-local FLOAT_STUDS = 9
-local FLOAT_RISING_SPEED = 15
-
-local function stopFloat()
-    _floatEnabled = false
-    if _floatConn then
-        _floatConn:Disconnect()
-        _floatConn = nil
-    end
-    if _floatLV then
-        _floatLV:Destroy()
-        _floatLV = nil
-    end
-    if _floatAttachment then
-        _floatAttachment:Destroy()
-        _floatAttachment = nil
-    end
-    _floatTargetY = nil
-    TweenService:Create(floatQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.AccentDark}):Play()
-end
-
-local function startFloat()
-    local character = LocalPlayer.Character
-    if not character then return end
-    local root = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not root or not humanoid or humanoid.Health <= 0 then return end
-
-    stopFloat()
-    _floatEnabled = true
-    _floatTargetY = root.Position.Y + FLOAT_STUDS
-
-    _floatAttachment = Instance.new("Attachment")
-    _floatAttachment.Name = "KYN_FloatAttachment"
-    _floatAttachment.Parent = root
-
-    _floatLV = Instance.new("LinearVelocity")
-    _floatLV.Name = "KYN_FloatLV"
-    _floatLV.Attachment0 = _floatAttachment
-    _floatLV.MaxForce = math.huge
-    _floatLV.RelativeTo = Enum.ActuatorRelativeTo.World
-    _floatLV.VectorVelocity = Vector3.new(0, 0, 0)
-    _floatLV.Parent = root
-
-    _floatConn = RunService.RenderStepped:Connect(function()
-        local currentCharacter = LocalPlayer.Character
-        if not _floatEnabled or not currentCharacter then
-            stopFloat()
-            return
-        end
-
-        local currentRoot = currentCharacter:FindFirstChild("HumanoidRootPart")
-        local currentHumanoid = currentCharacter:FindFirstChildOfClass("Humanoid")
-        if not currentRoot or not currentHumanoid or currentHumanoid.Health <= 0 or not _floatLV or not _floatLV.Parent then
-            stopFloat()
-            return
-        end
-
-        local moveDir = currentHumanoid.MoveDirection
-        local walkSpeed = currentHumanoid.WalkSpeed
-        local currentPos = currentRoot.Position
-        local yVelocity = (currentPos.Y < (_floatTargetY - 0.5)) and FLOAT_RISING_SPEED or 0
-        _floatLV.VectorVelocity = (moveDir * walkSpeed) + Vector3.new(0, yVelocity, 0)
-    end)
-
-    TweenService:Create(floatQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
-end
-
 function _runAutoClone()
     local character = LocalPlayer.Character
     if not character then warn("[KYN Hub] No hay personaje."); return end
@@ -2658,14 +2532,6 @@ cloneQuickBtn.MouseButton1Click:Connect(function()
     TweenService:Create(cloneQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.AccentDark}):Play()
 end)
 
-floatQuickBtn.MouseButton1Click:Connect(function()
-    if _floatEnabled then
-        stopFloat()
-    else
-        startFloat()
-    end
-end)
-
 -- BUCLES/RESPAWN
 task.spawn(function()
     while true do
@@ -2711,7 +2577,6 @@ end)
 _espPlayerInit()
 LocalPlayer.CharacterAdded:Connect(function(char)
     _ijCharacter = char
-    stopFloat()
     if _arEnabled and _antiKnockbackController then task.wait(0.2); _antiKnockbackController.Enable() end
     if _antiTorretEnabled then _antiTorretStart() else _antiTorretStop() end
 end)
@@ -2859,4 +2724,4 @@ do
         ("Bienvenido %s | %s | %s"):format(playerName, executorName, deviceType),
         THEME.Accent
     )
-end
+end 
