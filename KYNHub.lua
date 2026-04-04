@@ -151,15 +151,47 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
 
-local LocalPlayer = Players.LocalPlayer
+local function _loadLocalModule(path)
+    if not (readfile and loadstring) then return nil end
+    local okRead, source = pcall(readfile, path)
+    if not okRead or type(source) ~= "string" then return nil end
+
+    local chunk, loadErr = loadstring(source)
+    if not chunk then
+        warn("[KYN Hub] No se pudo cargar módulo:", path, loadErr)
+        return nil
+    end
+
+    local okRun, result = pcall(chunk)
+    if not okRun then
+        warn("[KYN Hub] Error ejecutando módulo:", path, result)
+        return nil
+    end
+    return result
+end
+
+local BootstrapModule = _loadLocalModule("modules/Bootstrap.lua")
+local FloatControllerModule = _loadLocalModule("modules/FloatController.lua")
+
+local LocalPlayer = (BootstrapModule and BootstrapModule.resolveLocalPlayer)
+    and BootstrapModule.resolveLocalPlayer(Players, 120, 0)
+    or Players.LocalPlayer
+
 if not LocalPlayer then
-    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
-    LocalPlayer = Players.LocalPlayer
+    for _ = 1, 120 do
+        Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+        LocalPlayer = Players.LocalPlayer
+        if LocalPlayer then
+            break
+        end
+        task.wait()
+    end
 end
 if not LocalPlayer then
     warn("[KYN Hub] No se pudo obtener LocalPlayer.")
     return
 end
+task.wait(0.1)
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ALLOWED_PLACE_ID = 109983668079237
 
@@ -352,14 +384,41 @@ local function _resolveGuiParent()
 end
 
 local function _createScreenGui(name)
+    if BootstrapModule and BootstrapModule.createScreenGui then
+        local ok, sg = pcall(function()
+            return BootstrapModule.createScreenGui({
+                Name = name,
+                CoreGui = CoreGui,
+                PlayerGui = PlayerGui,
+                Players = Players
+            })
+        end)
+        if ok and sg then
+            return sg
+        end
+    end
+
     local sg = Instance.new("ScreenGui")
     sg.Name = name
     sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
     local parent = _resolveGuiParent()
-    pcall(function()
+    local ok = pcall(function()
         sg.Parent = parent
     end)
-    if not sg.Parent then sg.Parent = PlayerGui end
+    if not ok or not sg.Parent then
+        pcall(function()
+            sg.Parent = PlayerGui
+        end)
+    end
+    if not sg.Parent then
+        local fallbackPlayer = Players.LocalPlayer
+        if fallbackPlayer then
+            sg.Parent = fallbackPlayer:WaitForChild("PlayerGui")
+        end
+    end
     return sg
 end
 
@@ -375,7 +434,16 @@ local OLD = CoreGui:FindFirstChild("KYNHubGUI") or PlayerGui:FindFirstChild("KYN
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
-local gui = _createScreenGui("KYNHubGUI")
+local gui
+do
+    local ok, err = pcall(function()
+        gui = _createScreenGui("KYNHubGUI")
+    end)
+    if not ok or not gui then
+        warn("[KYN Hub] ERROR AL CREAR GUI:", err)
+        gui = _createScreenGui("KYNHubGUI")
+    end
+end
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
@@ -470,6 +538,59 @@ do
         if dragging and dragInput and input == dragInput then
             local delta = input.Position - dragStart
             cloneDragFrame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+local floatDragFrame = Instance.new("Frame")
+floatDragFrame.Size = UDim2.new(0, 56, 0, 56)
+floatDragFrame.Position = _loadGuiPos("FloatButton", UDim2.new(1, -74, 0.57, 0))
+floatDragFrame.BackgroundTransparency = 1
+floatDragFrame.Active = true
+floatDragFrame.Draggable = true
+floatDragFrame.Parent = gui
+_bindGuiPosPersistence("FloatButton", floatDragFrame)
+_ensureGuiOnScreen("FloatButton", floatDragFrame, UDim2.new(1, -74, 0.57, 0))
+
+local floatQuickBtn = Instance.new("TextButton")
+floatQuickBtn.Size = UDim2.new(1, 0, 1, 0)
+floatQuickBtn.BackgroundColor3 = THEME.AccentDark
+floatQuickBtn.TextColor3 = THEME.TextLight
+floatQuickBtn.Font = Enum.Font.GothamBold
+floatQuickBtn.TextSize = 12
+floatQuickBtn.Text = "Float"
+floatQuickBtn.AutoButtonColor = false
+floatQuickBtn.Parent = floatDragFrame
+Instance.new("UICorner", floatQuickBtn).CornerRadius = UDim.new(1, 0)
+
+local floatQuickStroke = Instance.new("UIStroke", floatQuickBtn)
+floatQuickStroke.Color = THEME.Accent
+floatQuickStroke.Thickness = 1.4
+
+do
+    local dragging = false
+    local dragInput, dragStart, startPos
+    floatQuickBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = floatDragFrame.Position
+            dragInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and dragInput and input == dragInput then
+            local delta = input.Position - dragStart
+            floatDragFrame.Position = UDim2.new(
                 startPos.X.Scale, startPos.X.Offset + delta.X,
                 startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
@@ -856,10 +977,11 @@ RunService.RenderStepped:Connect(function()
     mainGradient.Rotation = (mainGradient.Rotation + 1.5) % 360
     local wave = math.sin(tick() * _animSpeed) * _animDist
     toggleBtn.Position = UDim2.new(0, 0, 0, wave)
-    mainFrame.Position = UDim2.new(0, 0, 0, wave)
 end)
 
 local isOpen, isAnimating = true, false
+mainDragFrame.Visible = true
+uiScale.Scale = 1
 local function toggleMenu()
     if isAnimating then return end
     isAnimating = true
@@ -2525,11 +2647,46 @@ function _runAutoClone()
     end)
 end
 
+local _floatController = nil
+if FloatControllerModule and FloatControllerModule.new then
+    local ok, controller = pcall(function()
+        return FloatControllerModule.new({
+            Player = LocalPlayer,
+            RunService = RunService,
+            TweenService = TweenService,
+            Button = floatQuickBtn,
+            OnColor = THEME.Accent,
+            OffColor = THEME.AccentDark,
+            StudsToRise = 9,
+            RiseSpeed = 15
+        })
+    end)
+    if ok then
+        _floatController = controller
+    end
+end
+
 cloneQuickBtn.MouseButton1Click:Connect(function()
     TweenService:Create(cloneQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
     _runAutoClone()
     task.wait(0.15)
     TweenService:Create(cloneQuickBtn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.AccentDark}):Play()
+end)
+
+floatQuickBtn.MouseButton1Click:Connect(function()
+    local ok, err = pcall(function()
+        if _floatController then
+            _floatController:toggle()
+        else
+            warn("[KYN Hub][Float] FloatController no está disponible.")
+        end
+    end)
+    if not ok then
+        warn("[KYN Hub][Float] Error al alternar Float:", err)
+        if _floatController then
+            _floatController:stop()
+        end
+    end
 end)
 
 -- BUCLES/RESPAWN
