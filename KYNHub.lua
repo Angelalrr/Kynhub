@@ -478,6 +478,146 @@ do
 end
 
 -- ==========================================
+-- // BOTÓN FLOTANTE RÁPIDO (FLOAT)
+-- ==========================================
+do
+    local floatDragFrame = Instance.new("Frame")
+    floatDragFrame.Name = "KYN_FloatDragFrame"
+    floatDragFrame.Size = UDim2.new(0, 56, 0, 56)
+    floatDragFrame.Position = _loadGuiPos("FloatButton", UDim2.new(1, -74, 0.55, 0))
+    floatDragFrame.BackgroundTransparency = 1
+    floatDragFrame.Active = true
+    floatDragFrame.Draggable = true
+    floatDragFrame.Parent = gui
+    floatDragFrame.Visible = true
+    _bindGuiPosPersistence("FloatButton", floatDragFrame)
+    _ensureGuiOnScreen("FloatButton", floatDragFrame, UDim2.new(1, -74, 0.55, 0))
+
+    local floatQuickBtn = Instance.new("TextButton")
+    floatQuickBtn.Size = UDim2.new(1, 0, 1, 0)
+    floatQuickBtn.BackgroundColor3 = THEME.AccentDark
+    floatQuickBtn.TextColor3 = THEME.TextLight
+    floatQuickBtn.Font = Enum.Font.GothamBold
+    floatQuickBtn.TextSize = 13
+    floatQuickBtn.Text = "Float"
+    floatQuickBtn.AutoButtonColor = false
+    floatQuickBtn.Parent = floatDragFrame
+    Instance.new("UICorner", floatQuickBtn).CornerRadius = UDim.new(1, 0)
+
+    local floatQuickStroke = Instance.new("UIStroke", floatQuickBtn)
+    floatQuickStroke.Color = THEME.Accent
+    floatQuickStroke.Thickness = 1.4
+
+    local dragging = false
+    local dragInput, dragStart, startPos
+    floatQuickBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = floatDragFrame.Position
+            dragInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and dragInput and input == dragInput then
+            local delta = input.Position - dragStart
+            floatDragFrame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- ==========================================
+    -- // LÓGICA DE FÍSICAS (SUBIDA SUAVE) FLOAT
+    -- ==========================================
+    local isFloating = false
+    local loopConnection
+    local activeLV
+    local activeAttachment
+    local targetHeight = 0
+    local RISING_SPEED = 15
+
+    local function stopFloating()
+        isFloating = false
+        floatQuickBtn.Text = "Float"
+        floatQuickBtn.BackgroundColor3 = THEME.AccentDark
+        
+        if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+        if activeLV then activeLV:Destroy() activeLV = nil end
+        if activeAttachment then activeAttachment:Destroy() activeAttachment = nil end
+    end
+
+    local function startFloating()
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        local humanoid = char:FindFirstChild("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not root then return end
+        
+        local studsToRise = 9
+        targetHeight = root.Position.Y + studsToRise
+        
+        isFloating = true
+        floatQuickBtn.Text = "Float"
+        floatQuickBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        
+        activeAttachment = Instance.new("Attachment")
+        activeAttachment.Parent = root
+        
+        activeLV = Instance.new("LinearVelocity")
+        activeLV.Attachment0 = activeAttachment
+        activeLV.MaxForce = math.huge
+        activeLV.RelativeTo = Enum.ActuatorRelativeTo.World
+        activeLV.Parent = root
+        
+        loopConnection = RunService.RenderStepped:Connect(function()
+            local currentChar = LocalPlayer.Character
+            if not currentChar then stopFloating() return end
+            
+            local currentRoot = currentChar:FindFirstChild("HumanoidRootPart")
+            local currentHumanoid = currentChar:FindFirstChild("Humanoid")
+            if not currentRoot or not currentHumanoid or currentHumanoid.Health <= 0 then
+                stopFloating()
+                return
+            end
+            
+            local currentPos = currentRoot.Position
+            local moveDir = currentHumanoid.MoveDirection
+            local walkSpeed = currentHumanoid.WalkSpeed
+            
+            local yVelocity = 0
+            
+            if currentPos.Y < targetHeight - 0.5 then
+                yVelocity = RISING_SPEED
+            else
+                yVelocity = 0
+            end
+            activeLV.VectorVelocity = (moveDir * walkSpeed) + Vector3.new(0, yVelocity, 0)
+        end)
+    end
+
+    floatQuickBtn.MouseButton1Click:Connect(function()
+        if isFloating then
+            stopFloating()
+        else
+            startFloating()
+        end
+    end)
+    
+    gui.Destroying:Connect(function()
+        stopFloating()
+    end)
+end
+
+-- ==========================================
 -- // MAIN GUI FRAME
 -- ==========================================
 local mainDragFrame = Instance.new("Frame")
@@ -648,6 +788,8 @@ btnYes.MouseButton1Click:Connect(function()
     local vanish = TweenService:Create(uiScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Scale = 0})
     TweenService:Create(btnDragFrame, TweenInfo.new(0.3), {Size = UDim2.new(0,0,0,0)}):Play()
     TweenService:Create(cloneDragFrame, TweenInfo.new(0.3), {Size = UDim2.new(0,0,0,0)}):Play()
+    local fDF = gui:FindFirstChild("KYN_FloatDragFrame")
+    if fDF then TweenService:Create(fDF, TweenInfo.new(0.3), {Size = UDim2.new(0,0,0,0)}):Play() end
     vanish:Play()
     vanish.Completed:Wait()
     gui:Destroy()
@@ -1991,7 +2133,8 @@ local function _setAutoStealFeature(state)
     end
 end
 
--- Anti Bee & Disco
+-- Anti Bee & Disco + Desync (wrapped in do...end to free local registers)
+do
 local _antiBeeDiscoEnabled = false
 local _antiBeeDiscoConns = {}
 local _antiBeeFOVLock = 70
@@ -2007,7 +2150,7 @@ local function _antiBeeClearEffects()
         if _antiBeeIsBlacklisted(v) then pcall(function() v:Destroy() end) end
     end
 end
-local function _antiBeeEnable()
+function _antiBeeEnable()
     if _antiBeeDiscoEnabled then return end
     _antiBeeDiscoEnabled = true
     _antiBeeClearEffects()
@@ -2017,7 +2160,7 @@ local function _antiBeeEnable()
         if camera and camera.FieldOfView ~= _antiBeeFOVLock then camera.FieldOfView = _antiBeeFOVLock end
     end))
 end
-local function _antiBeeDisable()
+function _antiBeeDisable()
     _antiBeeDiscoEnabled = false
     for _, c in ipairs(_antiBeeDiscoConns) do pcall(function() c:Disconnect() end) end
     _antiBeeDiscoConns = {}
@@ -2482,6 +2625,7 @@ function _loadDesync()
         end)
     end
 end
+end -- do (Anti Bee + Desync scope)
 
 
 
