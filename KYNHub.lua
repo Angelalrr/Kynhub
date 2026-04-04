@@ -1805,14 +1805,19 @@ end
 
 local function _autoStealPickTarget(pets)
     if #pets == 0 then return nil end
+    if not _autoStealManualTargetUid then
+        _autoStealManualTargetUid = pets[1].uid
+        _autoStealMode = "Manual"
+    end
     if _autoStealMode == "Manual" and _autoStealManualTargetUid then
         for _, pet in ipairs(pets) do
             if pet.uid == _autoStealManualTargetUid then
                 return pet
             end
         end
-        _autoStealMode = "Priority"
-        _autoStealManualTargetUid = nil
+        _autoStealMode = "Manual"
+        _autoStealManualTargetUid = pets[1].uid
+        return pets[1]
     end
     if _autoStealMode == "Nearest" then table.sort(pets, function(a,b) return a.dist < b.dist end); return pets[1] end
     if _autoStealMode == "Highest" then table.sort(pets, function(a,b) return a.genValue > b.genValue end); return pets[1] end
@@ -1853,7 +1858,7 @@ local function _autoStealUpdateVisuals(target)
         _autoStealBillboard.StudsOffset = Vector3.new(0, 3.5, 0)
         _autoStealBillboard.AlwaysOnTop = true
         _autoStealBillboard.Adornee = targetPart
-        _autoStealBillboard.Parent = CoreGui
+        _autoStealBillboard.Parent = _resolveGuiParent()
 
         local bg = Instance.new("Frame", _autoStealBillboard)
         bg.Size = UDim2.new(1, 0, 1, 0)
@@ -1916,10 +1921,12 @@ local function _autoStealUpdateTopList(sortedPets)
         item.BorderSizePixel = 0
         Instance.new("UICorner", item).CornerRadius = UDim.new(0, 4)
 
-        item.MouseButton1Click:Connect(function()
-            _autoStealManualTargetUid = pet.uid
-            _autoStealMode = "Manual"
-            _autoStealRefreshUi()
+        item.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                _autoStealManualTargetUid = pet.uid
+                _autoStealMode = "Manual"
+                _autoStealRefreshUi()
+            end
         end)
 
         if isTarget then
