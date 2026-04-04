@@ -308,16 +308,7 @@ local function _getExecutorName()
 end
 
 local function _notify(title, text, duration)
-    local ok = pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 6
-        })
-    end)
-    if not ok then
-        print(("[KYN Hub] %s - %s"):format(title, text))
-    end
+    ShowNotification(title, text, THEME.Accent)
 end
 
 local function _safeFireSignal(signalObj)
@@ -363,12 +354,7 @@ local function _createScreenGui(name)
     return sg
 end
 
-task.spawn(function()
-    task.wait(1)
-    local deviceType = (UIS.TouchEnabled and not UIS.KeyboardEnabled) and "Móvil" or "PC"
-    local executorName = _getExecutorName()
-    _notify("KYN Hub", ("Executor: %s | Dispositivo: %s"):format(executorName, deviceType), 8)
-end)
+-- Notificación borrada para evitar doble bienvenida
 
 -- Limpiar GUI antigua
 local OLD = CoreGui:FindFirstChild("KYNHubGUI") or PlayerGui:FindFirstChild("KYNHubGUI")
@@ -626,7 +612,7 @@ mainDragFrame.Position = _loadGuiPos("MainPanel", UDim2.new(0.5, -135, 0.5, -150
 mainDragFrame.BackgroundTransparency = 1
 mainDragFrame.Active = true
 mainDragFrame.Draggable = true
-mainDragFrame.Visible = true
+mainDragFrame.Visible = false
 mainDragFrame.Parent = gui
 _bindGuiPosPersistence("MainPanel", mainDragFrame)
 _ensureGuiOnScreen("MainPanel", mainDragFrame, UDim2.new(0.5, -135, 0.5, -150))
@@ -638,7 +624,7 @@ mainFrame.Parent = mainDragFrame
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
 local uiScale = Instance.new("UIScale")
-uiScale.Scale = 1
+uiScale.Scale = 0
 uiScale.Parent = mainDragFrame
 
 local mainStroke = Instance.new("UIStroke")
@@ -1001,7 +987,7 @@ RunService.RenderStepped:Connect(function()
     mainFrame.Position = UDim2.new(0, 0, 0, wave)
 end)
 
-local isOpen, isAnimating = true, false
+local isOpen, isAnimating = false, false
 local function toggleMenu()
     if isAnimating then return end
     isAnimating = true
@@ -1908,11 +1894,7 @@ local function _autoStealUpdateVisuals(target)
 end
 
 local function _autoStealRefreshUi()
-    if _autoStealMainButton then
-        _autoStealMainButton.Text = _autoStealEnabled and "AUTO STEAL: ON" or "AUTO STEAL: OFF"
-        _autoStealMainButton.BackgroundColor3 = _autoStealEnabled and Color3.fromRGB(30, 150, 90) or THEME.Danger
-    end
-    if _autoStealModeButton then _autoStealModeButton.Text = "Modo: " .. string.upper(_autoStealMode) end
+    -- Botones eliminados
 end
 
 local function _autoStealUpdateTopList(sortedPets)
@@ -1983,12 +1965,14 @@ end
 local function _autoStealApplyCompactState()
     if not _autoStealFrame then return end
     if _autoStealMinimized then
-        _autoStealFrame.Size = UDim2.new(0, 255, 0, 132)
+        _autoStealFrame.Size = UDim2.new(0, 255, 0, 35)
+        if _autoStealTargetLabel then _autoStealTargetLabel.Visible = false end
         if _autoStealListTitle then _autoStealListTitle.Visible = false end
         if _autoStealListScroll then _autoStealListScroll.Visible = false end
         if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "+" end
     else
         _autoStealFrame.Size = UDim2.new(0, 255, 0, 300)
+        if _autoStealTargetLabel then _autoStealTargetLabel.Visible = true end
         if _autoStealListTitle then _autoStealListTitle.Visible = true end
         if _autoStealListScroll then _autoStealListScroll.Visible = true end
         if _autoStealMinimizeButton then _autoStealMinimizeButton.Text = "-" end
@@ -2036,25 +2020,9 @@ local function _autoStealBuildGui()
     _autoStealTargetLabel.Font = Enum.Font.GothamMedium
     _autoStealTargetLabel.TextSize = 11
     _autoStealTargetLabel.TextXAlignment = Enum.TextXAlignment.Left
-    _autoStealMainButton = Instance.new("TextButton", _autoStealFrame)
-    _autoStealMainButton.Size = UDim2.new(1, -16, 0, 34)
-    _autoStealMainButton.Position = UDim2.new(0, 8, 0, 52)
-    _autoStealMainButton.Font = Enum.Font.GothamBold
-    _autoStealMainButton.TextSize = 12
-    _autoStealMainButton.TextColor3 = Color3.new(1, 1, 1)
-    _autoStealMainButton.AutoButtonColor = false
-    Instance.new("UICorner", _autoStealMainButton).CornerRadius = UDim.new(0, 7)
-    _autoStealModeButton = Instance.new("TextButton", _autoStealFrame)
-    _autoStealModeButton.Size = UDim2.new(1, -16, 0, 24)
-    _autoStealModeButton.Position = UDim2.new(0, 8, 0, 92)
-    _autoStealModeButton.BackgroundColor3 = THEME.FrameBg2
-    _autoStealModeButton.Font = Enum.Font.GothamBold
-    _autoStealModeButton.TextSize = 11
-    _autoStealModeButton.TextColor3 = THEME.TextLight
-    Instance.new("UICorner", _autoStealModeButton).CornerRadius = UDim.new(0, 6)
     _autoStealListTitle = Instance.new("TextLabel", _autoStealFrame)
     _autoStealListTitle.Size = UDim2.new(1, -16, 0, 18)
-    _autoStealListTitle.Position = UDim2.new(0, 8, 0, 122)
+    _autoStealListTitle.Position = UDim2.new(0, 8, 0, 52)
     _autoStealListTitle.BackgroundTransparency = 1
     _autoStealListTitle.Text = "TOP 10 (click para forzar)"
     _autoStealListTitle.TextColor3 = Color3.fromRGB(150, 150, 160)
@@ -2063,8 +2031,8 @@ local function _autoStealBuildGui()
     _autoStealListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     _autoStealListScroll = Instance.new("ScrollingFrame", _autoStealFrame)
-    _autoStealListScroll.Size = UDim2.new(1, -16, 1, -152)
-    _autoStealListScroll.Position = UDim2.new(0, 8, 0, 142)
+    _autoStealListScroll.Size = UDim2.new(1, -16, 1, -82)
+    _autoStealListScroll.Position = UDim2.new(0, 8, 0, 72)
     _autoStealListScroll.BackgroundTransparency = 1
     _autoStealListScroll.BorderSizePixel = 0
     _autoStealListScroll.ScrollBarThickness = 4
@@ -2073,21 +2041,7 @@ local function _autoStealBuildGui()
     _autoStealListLayout.Padding = UDim.new(0, 5)
     _autoStealListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    _autoStealMainButton.MouseButton1Click:Connect(function()
-        _autoStealEnabled = not _autoStealEnabled
-        _autoStealRefreshUi()
-    end)
-    _autoStealModeButton.MouseButton1Click:Connect(function()
-        if _autoStealMode == "Priority" then
-            _autoStealMode = "Nearest"
-        elseif _autoStealMode == "Nearest" then
-            _autoStealMode = "Highest"
-        else
-            _autoStealMode = "Priority"
-        end
-        _autoStealManualTargetUid = nil
-        _autoStealRefreshUi()
-    end)
+    -- Botones de toggle de Auto Steal eliminados
     _autoStealMinimizeButton.MouseButton1Click:Connect(function()
         _autoStealMinimized = not _autoStealMinimized
         _autoStealApplyCompactState()
@@ -2484,6 +2438,29 @@ function _buildDesyncPanel()
     title.TextSize = 15
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = _desyncPanel
+
+    local _desyncMinimizeBtn = Instance.new("TextButton", _desyncPanel)
+    _desyncMinimizeBtn.Size = UDim2.new(0, 22, 0, 20)
+    _desyncMinimizeBtn.Position = UDim2.new(1, -28, 0, 7)
+    _desyncMinimizeBtn.BackgroundColor3 = THEME.FrameBg2
+    _desyncMinimizeBtn.TextColor3 = THEME.TextLight
+    _desyncMinimizeBtn.Font = Enum.Font.GothamBold
+    _desyncMinimizeBtn.TextSize = 14
+    _desyncMinimizeBtn.AutoButtonColor = false
+    _desyncMinimizeBtn.Text = "-"
+    Instance.new("UICorner", _desyncMinimizeBtn).CornerRadius = UDim.new(0, 5)
+    
+    local isDesyncMinimized = false
+    _desyncMinimizeBtn.MouseButton1Click:Connect(function()
+        isDesyncMinimized = not isDesyncMinimized
+        _desyncPanel.Size = isDesyncMinimized and UDim2.new(0, 250, 0, 35) or UDim2.new(0, 250, 0, 250)
+        _desyncMinimizeBtn.Text = isDesyncMinimized and "+" or "-"
+        for _, child in ipairs(_desyncPanel:GetChildren()) do
+            if child ~= title and child ~= _desyncMinimizeBtn and child:IsA("GuiObject") then
+                child.Visible = not isDesyncMinimized
+            end
+        end
+    end)
 
     _desyncStatusCircle = Instance.new("Frame")
     _desyncStatusCircle.Size = UDim2.new(0, 12, 0, 12)
