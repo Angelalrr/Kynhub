@@ -1806,19 +1806,15 @@ end
 
 local function _autoStealPickTarget(pets)
     if #pets == 0 then return nil end
-    if not _autoStealManualTargetUid then
-        _autoStealManualTargetUid = pets[1].uid
-        _autoStealMode = "Manual"
-    end
     if _autoStealMode == "Manual" and _autoStealManualTargetUid then
         for _, pet in ipairs(pets) do
             if pet.uid == _autoStealManualTargetUid then
                 return pet
             end
         end
-        _autoStealMode = "Manual"
-        _autoStealManualTargetUid = pets[1].uid
-        return pets[1]
+        -- If manual target vanishes, drop back to Priority instead of locking onto the next one
+        _autoStealMode = "Priority"
+        _autoStealManualTargetUid = nil
     end
     if _autoStealMode == "Nearest" then table.sort(pets, function(a,b) return a.dist < b.dist end); return pets[1] end
     if _autoStealMode == "Highest" then table.sort(pets, function(a,b) return a.genValue > b.genValue end); return pets[1] end
@@ -1939,9 +1935,10 @@ local function _autoStealUpdateTopList(sortedPets)
 
             -- Store uid so click handler survives rebuilds
             local petUid = pet.uid
-            item.MouseButton1Click:Connect(function()
+            item.Activated:Connect(function()
                 _autoStealManualTargetUid = petUid
                 _autoStealMode = "Manual"
+                _autoStealRefreshUi()
             end)
 
             if isTarget then
