@@ -153,13 +153,18 @@ local StarterGui        = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
-    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
-    LocalPlayer = Players.LocalPlayer
+    for _ = 1, 120 do
+        Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+        LocalPlayer = Players.LocalPlayer
+        if LocalPlayer then break end
+        task.wait()
+    end
 end
 if not LocalPlayer then
     warn("[KYN Hub] No se pudo obtener LocalPlayer.")
     return
 end
+task.wait(0.1)
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ALLOWED_PLACE_ID = 109983668079237
 
@@ -355,11 +360,24 @@ local function _createScreenGui(name)
     local sg = Instance.new("ScreenGui")
     sg.Name = name
     sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
     local parent = _resolveGuiParent()
-    pcall(function()
+    local ok = pcall(function()
         sg.Parent = parent
     end)
-    if not sg.Parent then sg.Parent = PlayerGui end
+    if not ok or not sg.Parent then
+        pcall(function()
+            sg.Parent = PlayerGui
+        end)
+    end
+    if not sg.Parent then
+        local fallbackPlayer = Players.LocalPlayer
+        if fallbackPlayer then
+            sg.Parent = fallbackPlayer:WaitForChild("PlayerGui")
+        end
+    end
     return sg
 end
 
@@ -375,7 +393,16 @@ local OLD = CoreGui:FindFirstChild("KYNHubGUI") or PlayerGui:FindFirstChild("KYN
 if OLD then OLD:Destroy() end
 
 -- ScreenGui
-local gui = _createScreenGui("KYNHubGUI")
+local gui
+do
+    local ok, err = pcall(function()
+        gui = _createScreenGui("KYNHubGUI")
+    end)
+    if not ok or not gui then
+        warn("[KYN Hub] ERROR AL CREAR GUI:", err)
+        gui = _createScreenGui("KYNHubGUI")
+    end
+end
 
 -- ==========================================
 -- // BOTÓN FLOTANTE (OPEN/CLOSE)
@@ -909,10 +936,11 @@ RunService.RenderStepped:Connect(function()
     mainGradient.Rotation = (mainGradient.Rotation + 1.5) % 360
     local wave = math.sin(tick() * _animSpeed) * _animDist
     toggleBtn.Position = UDim2.new(0, 0, 0, wave)
-    mainFrame.Position = UDim2.new(0, 0, 0, wave)
 end)
 
 local isOpen, isAnimating = true, false
+mainDragFrame.Visible = true
+uiScale.Scale = 1
 local function toggleMenu()
     if isAnimating then return end
     isAnimating = true
