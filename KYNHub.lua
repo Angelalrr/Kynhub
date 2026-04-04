@@ -151,12 +151,39 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 local StarterGui        = game:GetService("StarterGui")
 
-local LocalPlayer = Players.LocalPlayer
+local function _loadLocalModule(path)
+    if not (readfile and loadstring) then return nil end
+    local okRead, source = pcall(readfile, path)
+    if not okRead or type(source) ~= "string" then return nil end
+
+    local chunk, loadErr = loadstring(source)
+    if not chunk then
+        warn("[KYN Hub] No se pudo cargar módulo:", path, loadErr)
+        return nil
+    end
+
+    local okRun, result = pcall(chunk)
+    if not okRun then
+        warn("[KYN Hub] Error ejecutando módulo:", path, result)
+        return nil
+    end
+    return result
+end
+
+local BootstrapModule = _loadLocalModule("modules/Bootstrap.lua")
+local FloatControllerModule = _loadLocalModule("modules/FloatController.lua")
+
+local LocalPlayer = (BootstrapModule and BootstrapModule.resolveLocalPlayer)
+    and BootstrapModule.resolveLocalPlayer(Players, 120, 0)
+    or Players.LocalPlayer
+
 if not LocalPlayer then
     for _ = 1, 120 do
         Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
         LocalPlayer = Players.LocalPlayer
-        if LocalPlayer then break end
+        if LocalPlayer then
+            break
+        end
         task.wait()
     end
 end
@@ -357,6 +384,20 @@ local function _resolveGuiParent()
 end
 
 local function _createScreenGui(name)
+    if BootstrapModule and BootstrapModule.createScreenGui then
+        local ok, sg = pcall(function()
+            return BootstrapModule.createScreenGui({
+                Name = name,
+                CoreGui = CoreGui,
+                PlayerGui = PlayerGui,
+                Players = Players
+            })
+        end)
+        if ok and sg then
+            return sg
+        end
+    end
+
     local sg = Instance.new("ScreenGui")
     sg.Name = name
     sg.ResetOnSpawn = false
@@ -2606,81 +2647,23 @@ function _runAutoClone()
     end)
 end
 
-local _floatEnabled = false
-local _floatLoopConnection = nil
-local _floatActiveLV = nil
-local _floatActiveAttachment = nil
-local _floatTargetHeight = 0
-local _floatRiseSpeed = 15
-local _floatStudsToRise = 9
-
-local function _safeTweenButtonColor(button, color)
-    if not button or not color then return end
-    pcall(function()
-        TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = color}):Play()
+local _floatController = nil
+if FloatControllerModule and FloatControllerModule.new then
+    local ok, controller = pcall(function()
+        return FloatControllerModule.new({
+            Player = LocalPlayer,
+            RunService = RunService,
+            TweenService = TweenService,
+            Button = floatQuickBtn,
+            OnColor = THEME.Accent,
+            OffColor = THEME.AccentDark,
+            StudsToRise = 9,
+            RiseSpeed = 15
+        })
     end)
-end
-
-local function _stopFloat()
-    _floatEnabled = false
-    if _floatLoopConnection and typeof(_floatLoopConnection) == "RBXScriptConnection" then
-        _floatLoopConnection:Disconnect()
+    if ok then
+        _floatController = controller
     end
-    _floatLoopConnection = nil
-    if _floatActiveLV then _floatActiveLV:Destroy() _floatActiveLV = nil end
-    if _floatActiveAttachment then _floatActiveAttachment:Destroy() _floatActiveAttachment = nil end
-    _safeTweenButtonColor(floatQuickBtn, THEME.AccentDark)
-end
-
-local function _startFloat()
-    _stopFloat()
-
-    local character = LocalPlayer.Character
-    if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not root or humanoid.Health <= 0 then return end
-
-    _floatTargetHeight = root.Position.Y + _floatStudsToRise
-    _floatEnabled = true
-    _safeTweenButtonColor(floatQuickBtn, THEME.Accent)
-
-    _floatActiveAttachment = Instance.new("Attachment")
-    _floatActiveAttachment.Parent = root
-
-    _floatActiveLV = Instance.new("LinearVelocity")
-    _floatActiveLV.Attachment0 = _floatActiveAttachment
-    _floatActiveLV.MaxForce = math.huge
-    _floatActiveLV.RelativeTo = Enum.ActuatorRelativeTo.World
-    _floatActiveLV.Parent = root
-
-    _floatLoopConnection = RunService.RenderStepped:Connect(function()
-        local currentCharacter = LocalPlayer.Character
-        if not currentCharacter then _stopFloat() return end
-
-        local currentRoot = currentCharacter:FindFirstChild("HumanoidRootPart")
-        local currentHumanoid = currentCharacter:FindFirstChildOfClass("Humanoid")
-        if not currentRoot or not currentHumanoid or currentHumanoid.Health <= 0 then
-            _stopFloat()
-            return
-        end
-
-        local currentPos = currentRoot.Position
-        local moveDir = currentHumanoid.MoveDirection
-        local walkSpeed = currentHumanoid.WalkSpeed
-        local yVelocity = 0
-
-        if currentPos.Y < _floatTargetHeight - 0.5 then
-            yVelocity = _floatRiseSpeed
-        end
-
-        if not _floatActiveLV or _floatActiveLV.Parent ~= currentRoot then
-            _stopFloat()
-            return
-        end
-        _floatActiveLV.VectorVelocity = (moveDir * walkSpeed) + Vector3.new(0, yVelocity, 0)
-    end)
 end
 
 cloneQuickBtn.MouseButton1Click:Connect(function()
@@ -2692,15 +2675,17 @@ end)
 
 floatQuickBtn.MouseButton1Click:Connect(function()
     local ok, err = pcall(function()
-        if _floatEnabled then
-            _stopFloat()
+        if _floatController then
+            _floatController:toggle()
         else
-            _startFloat()
+            warn("[KYN Hub][Float] FloatController no está disponible.")
         end
     end)
     if not ok then
         warn("[KYN Hub][Float] Error al alternar Float:", err)
-        _stopFloat()
+        if _floatController then
+            _floatController:stop()
+        end
     end
 end)
 
