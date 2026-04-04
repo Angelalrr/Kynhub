@@ -1693,7 +1693,7 @@ end
 
 -- Auto Steal (simple)
 local _autoStealEnabled = false
-local _autoStealMode = "Priority"
+local _autoStealMode = "Manual"
 local _autoStealGui, _autoStealFrame = nil, nil
 local _autoStealTargetLabel, _autoStealMainButton, _autoStealModeButton = nil, nil, nil
 local _autoStealListScroll, _autoStealListLayout = nil, nil
@@ -1705,6 +1705,7 @@ local _autoStealManualTargetUid = nil
 local _autoStealCurrentTargetUid = nil
 local _autoStealMinimized = false
 local _autoStealCachedUidStr = ""
+local _autoStealCurrentPetList = {}
 local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
 
 local function _autoStealEnsureDeps()
@@ -1806,18 +1807,18 @@ end
 
 local function _autoStealPickTarget(pets)
     if #pets == 0 then return nil end
-    if _autoStealMode == "Manual" and _autoStealManualTargetUid then
-        for _, pet in ipairs(pets) do
-            if pet.uid == _autoStealManualTargetUid then
-                return pet
-            end
-        end
-        -- If manual target vanishes, drop back to Priority instead of locking onto the next one
-        _autoStealMode = "Priority"
-        _autoStealManualTargetUid = nil
+    -- Always manual mode: if no target selected yet, pick #1
+    if not _autoStealManualTargetUid then
+        _autoStealManualTargetUid = pets[1].uid
     end
-    if _autoStealMode == "Nearest" then table.sort(pets, function(a,b) return a.dist < b.dist end); return pets[1] end
-    if _autoStealMode == "Highest" then table.sort(pets, function(a,b) return a.genValue > b.genValue end); return pets[1] end
+    -- Try to find the manually selected target
+    for _, pet in ipairs(pets) do
+        if pet.uid == _autoStealManualTargetUid then
+            return pet
+        end
+    end
+    -- If it vanished, fall back to #1
+    _autoStealManualTargetUid = pets[1].uid
     return pets[1]
 end
 
@@ -1903,6 +1904,10 @@ local function _autoStealUpdateTopList(sortedPets)
     if not _autoStealListScroll then return end
 
     local count = math.min(#sortedPets, 10)
+    _autoStealCurrentPetList = {}
+    for i = 1, count do
+        _autoStealCurrentPetList[i] = sortedPets[i]
+    end
 
     -- Build UID string to detect if the pet list actually changed
     local uidParts = {}
@@ -1913,33 +1918,22 @@ local function _autoStealUpdateTopList(sortedPets)
     local needsRebuild = (newUidStr ~= _autoStealCachedUidStr)
 
     if needsRebuild then
-        -- Pet list changed: full rebuild
         _autoStealCachedUidStr = newUidStr
         for _, child in ipairs(_autoStealListScroll:GetChildren()) do
-            if child:IsA("TextButton") then child:Destroy() end
+            if child:IsA("Frame") and child.Name:find("PetItem_") then child:Destroy() end
         end
 
         for i = 1, count do
             local pet = sortedPets[i]
-            local isTarget = _autoStealEnabled and (pet.uid == _autoStealCurrentTargetUid)
+            local isTarget = (pet.uid == _autoStealManualTargetUid)
 
-            local item = Instance.new("TextButton", _autoStealListScroll)
+            local item = Instance.new("Frame", _autoStealListScroll)
             item.Name = "PetItem_" .. i
             item.Size = UDim2.new(1, -6, 0, 26)
             item.BackgroundColor3 = isTarget and Color3.fromRGB(30, 60, 45) or Color3.fromRGB(30, 32, 38)
-            item.Text = ""
-            item.AutoButtonColor = false
             item.BorderSizePixel = 0
             item.LayoutOrder = i
             Instance.new("UICorner", item).CornerRadius = UDim.new(0, 4)
-
-            -- Store uid so click handler survives rebuilds
-            local petUid = pet.uid
-            item.Activated:Connect(function()
-                _autoStealManualTargetUid = petUid
-                _autoStealMode = "Manual"
-                _autoStealRefreshUi()
-            end)
 
             if isTarget then
                 local stroke = Instance.new("UIStroke", item)
@@ -1957,7 +1951,6 @@ local function _autoStealUpdateTopList(sortedPets)
             rankLbl.TextColor3 = isTarget and Color3.fromRGB(0, 255, 100) or THEME.Accent
             rankLbl.Font = Enum.Font.GothamBold
             rankLbl.TextSize = 11
-            rankLbl.Active = false
 
             local nameLbl = Instance.new("TextLabel", item)
             nameLbl.Name = "NameLbl"
@@ -1970,7 +1963,6 @@ local function _autoStealUpdateTopList(sortedPets)
             nameLbl.TextSize = 10
             nameLbl.TextXAlignment = Enum.TextXAlignment.Left
             nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-            nameLbl.Active = false
 
             local valLbl = Instance.new("TextLabel", item)
             valLbl.Name = "ValLbl"
@@ -1982,17 +1974,15 @@ local function _autoStealUpdateTopList(sortedPets)
             valLbl.Font = Enum.Font.GothamBold
             valLbl.TextSize = 10
             valLbl.TextXAlignment = Enum.TextXAlignment.Right
-            valLbl.Active = false
         end
     else
-        -- Same pets, just update highlights and values in-place
+        -- Same pets, just update highlights in-place
         for i = 1, count do
             local pet = sortedPets[i]
-            local isTarget = _autoStealEnabled and (pet.uid == _autoStealCurrentTargetUid)
+            local isTarget = (pet.uid == _autoStealManualTargetUid)
             local item = _autoStealListScroll:FindFirstChild("PetItem_" .. i)
             if item then
                 item.BackgroundColor3 = isTarget and Color3.fromRGB(30, 60, 45) or Color3.fromRGB(30, 32, 38)
-                -- Update stroke
                 local stroke = item:FindFirstChild("TargetStroke")
                 if isTarget and not stroke then
                     stroke = Instance.new("UIStroke", item)
@@ -2002,12 +1992,10 @@ local function _autoStealUpdateTopList(sortedPets)
                 elseif not isTarget and stroke then
                     stroke:Destroy()
                 end
-                -- Update rank color
                 local rankLbl = item:FindFirstChild("RankLbl")
                 if rankLbl then
                     rankLbl.TextColor3 = isTarget and Color3.fromRGB(0, 255, 100) or THEME.Accent
                 end
-                -- Update value text
                 local valLbl = item:FindFirstChild("ValLbl")
                 if valLbl then
                     valLbl.Text = pet.genText
@@ -2103,6 +2091,41 @@ local function _autoStealBuildGui()
         _autoStealMinimized = not _autoStealMinimized
         _autoStealApplyCompactState()
     end)
+
+    -- Global click detector: detect clicks by position, bypass broken button events
+    UIS.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if not _autoStealListScroll or not _autoStealListScroll.Visible then return end
+        if _autoStealMinimized then return end
+
+        local clickX = input.Position.X
+        local clickY = input.Position.Y
+
+        -- Check if click is inside the scroll frame area first
+        local scrollPos = _autoStealListScroll.AbsolutePosition
+        local scrollSize = _autoStealListScroll.AbsoluteSize
+        if clickX < scrollPos.X or clickX > scrollPos.X + scrollSize.X then return end
+        if clickY < scrollPos.Y or clickY > scrollPos.Y + scrollSize.Y then return end
+
+        -- Find which item was clicked
+        for _, child in ipairs(_autoStealListScroll:GetChildren()) do
+            if child:IsA("Frame") and child.Name:find("PetItem_") then
+                local itemPos = child.AbsolutePosition
+                local itemSize = child.AbsoluteSize
+                if clickX >= itemPos.X and clickX <= itemPos.X + itemSize.X
+                    and clickY >= itemPos.Y and clickY <= itemPos.Y + itemSize.Y then
+                    local idx = child.LayoutOrder
+                    if _autoStealCurrentPetList[idx] then
+                        _autoStealManualTargetUid = _autoStealCurrentPetList[idx].uid
+                        _autoStealCachedUidStr = "" -- force visual refresh
+                    end
+                    break
+                end
+            end
+        end
+    end)
+
     _autoStealApplyCompactState()
     _autoStealRefreshUi()
 end
