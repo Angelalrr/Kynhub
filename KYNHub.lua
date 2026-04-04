@@ -2093,8 +2093,7 @@ local function _autoStealBuildGui()
     end)
 
     -- Global click detector: detect clicks by position, bypass broken button events
-    UIS.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
+    UIS.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         if not _autoStealListScroll or not _autoStealListScroll.Visible then return end
         if _autoStealMinimized then return end
@@ -2137,7 +2136,7 @@ local function _autoStealStartLoop()
         while _autoStealFeatureRunning and _autoStealGui and _autoStealGui.Parent do
             task.wait(0.35)
             local pets = _autoStealGetPets()
-            local target = _autoStealEnabled and _autoStealPickTarget(pets) or nil
+            local target = _autoStealPickTarget(pets)
             _autoStealCurrentTargetUid = target and target.uid or nil
             if _autoStealTargetLabel then _autoStealTargetLabel.Text = target and ("Objetivo: " .. target.name) or "Objetivo: Ninguno" end
             if target then
@@ -2153,6 +2152,7 @@ end
 
 local function _setAutoStealFeature(state)
     if state then
+        _autoStealEnabled = true
         if not _autoStealGui then _autoStealBuildGui() end
         if _autoStealGui then _autoStealGui.Enabled = true end
         _autoStealStartLoop()
