@@ -184,6 +184,8 @@ local SETTINGS = {
     AntiTorret = false,
     AntiBeeDisco = false,
     ShowAutoCloneButton = true,
+    ShowFloatButton = true,
+    ShowRespawnButton = true,
     StealSpeedValue = 25,
     GuiPositions = {},
 }
@@ -475,7 +477,7 @@ do
     floatDragFrame.Active = true
     floatDragFrame.Draggable = true
     floatDragFrame.Parent = gui
-    floatDragFrame.Visible = true
+    floatDragFrame.Visible = SETTINGS.ShowFloatButton
     _bindGuiPosPersistence("FloatButton", floatDragFrame)
     _ensureGuiOnScreen("FloatButton", floatDragFrame, UDim2.new(1, -74, 0.55, 0))
 
@@ -600,6 +602,167 @@ do
     
     gui.Destroying:Connect(function()
         stopFloating()
+    end)
+end
+
+-- ==========================================
+-- // BOTÓN FLOTANTE RÁPIDO (RESPAWN)
+-- ==========================================
+do
+    local respawnDragFrame = Instance.new("Frame")
+    respawnDragFrame.Name = "KYN_RespawnDragFrame"
+    respawnDragFrame.Size = UDim2.new(0, 56, 0, 56)
+    respawnDragFrame.Position = _loadGuiPos("RespawnButton", UDim2.new(1, -74, 0.65, 0))
+    respawnDragFrame.BackgroundTransparency = 1
+    respawnDragFrame.Active = true
+    respawnDragFrame.Draggable = true
+    respawnDragFrame.Parent = gui
+    respawnDragFrame.Visible = SETTINGS.ShowRespawnButton
+    _bindGuiPosPersistence("RespawnButton", respawnDragFrame)
+    _ensureGuiOnScreen("RespawnButton", respawnDragFrame, UDim2.new(1, -74, 0.65, 0))
+
+    local respawnQuickBtn = Instance.new("TextButton")
+    respawnQuickBtn.Size = UDim2.new(1, 0, 1, 0)
+    respawnQuickBtn.BackgroundColor3 = THEME.FrameBg
+    respawnQuickBtn.BackgroundTransparency = 0.1
+    respawnQuickBtn.TextColor3 = Color3.fromRGB(235, 80, 80)
+    respawnQuickBtn.Font = Enum.Font.GothamBold
+    respawnQuickBtn.TextSize = 13
+    respawnQuickBtn.Text = "Respawn"
+    respawnQuickBtn.AutoButtonColor = false
+    respawnQuickBtn.Parent = respawnDragFrame
+    Instance.new("UICorner", respawnQuickBtn).CornerRadius = UDim.new(1, 0)
+
+    local respawnQuickStroke = Instance.new("UIStroke", respawnQuickBtn)
+    respawnQuickStroke.Color = Color3.fromRGB(200, 50, 50)
+    respawnQuickStroke.Thickness = 1.4
+
+    local dragging = false
+    local dragInput, dragStart, startPos
+    respawnQuickBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = respawnDragFrame.Position
+            dragInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and dragInput and input == dragInput then
+            local delta = input.Position - dragStart
+            respawnDragFrame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- Lógica de Respawn Insta Reset (del usuario)
+    local cachedCraftCFrame = nil
+    local craftMachine = nil
+
+    local function updateCraftCache()
+        craftMachine = Workspace:FindFirstChild("CraftingMachine")
+        if craftMachine then
+            local part = craftMachine:FindFirstChild("VFX", true)
+            if part then
+                part = part:FindFirstChild("Secret", true)
+                if part then
+                    part = part:FindFirstChild("SoundPart", true)
+                    if part then
+                        cachedCraftCFrame = part.CFrame
+                    end
+                end
+            end
+        end
+    end
+    updateCraftCache()
+
+    Workspace.ChildAdded:Connect(function(c)
+        if c.Name == "CraftingMachine" then
+            task.defer(updateCraftCache)
+        end
+    end)
+
+    Players.RespawnTime = 0
+    RunService.Heartbeat:Connect(function()
+        if Players.RespawnTime ~= 0 then
+            Players.RespawnTime = 0
+        end
+    end)
+
+    local debounce = false
+    local charConnection = nil
+
+    local function doReset()
+        if debounce then return end
+        debounce = true
+
+        local char = LocalPlayer.Character
+        if not char then 
+            debounce = false 
+            return 
+        end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        
+        if not hum or not hrp or hum.Health <= 0 then 
+            debounce = false 
+            return 
+        end
+
+        respawnQuickBtn.Text = "..."
+        local Camera = workspace.CurrentCamera
+        local lockedCameraSubject = Camera.CameraSubject
+        Camera.CameraSubject = nil
+
+        if charConnection then 
+            charConnection:Disconnect() 
+        end
+
+        charConnection = LocalPlayer.CharacterAdded:Connect(function(newChar)
+            charConnection:Disconnect()
+            Camera.CameraSubject = nil
+            task.defer(function()
+                local newHum = newChar:WaitForChild("Humanoid", 0.5)
+                if newHum then Camera.CameraSubject = newHum end
+            end)
+        end)
+
+        if cachedCraftCFrame then
+            hrp.CFrame = cachedCraftCFrame
+        elseif craftMachine then
+            updateCraftCache()
+            if cachedCraftCFrame then hrp.CFrame = cachedCraftCFrame end
+        end
+
+        Players.RespawnTime = 0
+        hum.Health = 0
+        hum:ChangeState(Enum.HumanoidStateType.Dead)
+        char:BreakJoints()
+        
+        task.wait(0.03)
+        pcall(function() LocalPlayer:LoadCharacter() end)
+
+        task.delay(0.3, function()
+            respawnQuickBtn.Text = "Respawn"
+            debounce = false
+        end)
+    end
+
+    respawnQuickBtn.MouseButton1Click:Connect(doReset)
+
+    UIS.InputBegan:Connect(function(input, gp)
+        if not gp and input.KeyCode == Enum.KeyCode.R then
+            doReset()
+        end
     end)
 end
 
@@ -1706,6 +1869,7 @@ local _autoStealCurrentTargetUid = nil
 local _autoStealMinimized = false
 local _autoStealCachedUidStr = ""
 local _autoStealCurrentPetList = {}
+local _autoStealExplicitTarget = false
 local _AUTO_STEAL_PRIORITY = {"Strawberry Elephant","Meowl","Skibidi Toilet","Headless Horseman","Dragon Gingerini","Dragon Cannelloni","Ketupat Bros","Hydra Dragon Cannelloni","La Supreme Combinasion","Love Love Bear"}
 
 local function _autoStealEnsureDeps()
@@ -1807,9 +1971,9 @@ end
 
 local function _autoStealPickTarget(pets)
     if #pets == 0 then return nil end
-    -- Always manual mode: if no target selected yet, pick #1
-    if not _autoStealManualTargetUid then
+    if not _autoStealExplicitTarget then
         _autoStealManualTargetUid = pets[1].uid
+        return pets[1]
     end
     -- Try to find the manually selected target
     for _, pet in ipairs(pets) do
@@ -1817,7 +1981,8 @@ local function _autoStealPickTarget(pets)
             return pet
         end
     end
-    -- If it vanished, fall back to #1
+    -- If it vanished, fall back to #1 lock off
+    _autoStealExplicitTarget = false
     _autoStealManualTargetUid = pets[1].uid
     return pets[1]
 end
@@ -2116,6 +2281,7 @@ local function _autoStealBuildGui()
                     and clickY >= itemPos.Y and clickY <= itemPos.Y + itemSize.Y then
                     local idx = child.LayoutOrder
                     if _autoStealCurrentPetList[idx] then
+                        _autoStealExplicitTarget = true
                         _autoStealManualTargetUid = _autoStealCurrentPetList[idx].uid
                         _autoStealCachedUidStr = "" -- force visual refresh
                     end
@@ -2815,6 +2981,24 @@ _G.KYNAddToggle("Main", {
     Callback = function(state)
         setSetting("ShowAutoCloneButton", state)
         cloneDragFrame.Visible = state
+    end
+})
+_G.KYNAddToggle("Main", {
+    Name = "Mostrar botón Float",
+    Default = SETTINGS.ShowFloatButton,
+    Callback = function(state)
+        setSetting("ShowFloatButton", state)
+        local floatGui = gui:FindFirstChild("KYN_FloatDragFrame")
+        if floatGui then floatGui.Visible = state end
+    end
+})
+_G.KYNAddToggle("Main", {
+    Name = "Mostrar botón Respawn",
+    Default = SETTINGS.ShowRespawnButton,
+    Callback = function(state)
+        setSetting("ShowRespawnButton", state)
+        local respawnGui = gui:FindFirstChild("KYN_RespawnDragFrame")
+        if respawnGui then respawnGui.Visible = state end
     end
 })
 
