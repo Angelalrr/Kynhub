@@ -4,21 +4,45 @@
 
 --// ======= THEME KYN HUB =========
 local THEME = {
-    FrameBg        = Color3.fromRGB(12, 13, 18),
-    FrameBg2       = Color3.fromRGB(20, 22, 28),
-    Accent         = Color3.fromRGB(0, 215, 255),
-    AccentDark     = Color3.fromRGB(0, 80, 180),
-    AccentHover    = Color3.fromRGB(80, 230, 255),
-    TabIdle        = Color3.fromRGB(24, 26, 33),
-    TabActive      = Color3.fromRGB(0, 215, 255),
-    ToggleBg       = Color3.fromRGB(24, 26, 33),
-    ToggleHover    = Color3.fromRGB(34, 37, 47),
-    ToggleOffTrack = Color3.fromRGB(60, 65, 80),
-    ToggleOnTrack  = Color3.fromRGB(0, 215, 255),
-    TextLight      = Color3.fromRGB(240, 240, 250),
+    FrameBg        = Color3.fromRGB(10, 11, 16),
+    FrameBg2       = Color3.fromRGB(18, 20, 26),
+    Accent         = Color3.fromRGB(0, 220, 255),
+    AccentDark     = Color3.fromRGB(0, 100, 200),
+    AccentHover    = Color3.fromRGB(100, 240, 255),
+    TabIdle        = Color3.fromRGB(22, 24, 30),
+    TabActive      = Color3.fromRGB(0, 220, 255),
+    ToggleBg       = Color3.fromRGB(22, 24, 30),
+    ToggleHover    = Color3.fromRGB(32, 35, 45),
+    ToggleOffTrack = Color3.fromRGB(50, 55, 70),
+    ToggleOnTrack  = Color3.fromRGB(0, 220, 255),
+    TextLight      = Color3.fromRGB(245, 245, 255),
     TitleText      = Color3.fromRGB(255, 255, 255),
-    Danger         = Color3.fromRGB(255, 60, 80)
+    Danger         = Color3.fromRGB(255, 50, 70)
 }
+
+function _animateBorder(stroke, thickness, colorSeq)
+    if not stroke then return end
+    stroke.Thickness = thickness or 1.5
+    stroke.Color = Color3.new(1, 1, 1)
+    local grad = Instance.new("UIGradient")
+    grad.Color = colorSeq or ColorSequence.new({
+        ColorSequenceKeypoint.new(0, THEME.Accent),
+        ColorSequenceKeypoint.new(0.5, THEME.AccentDark),
+        ColorSequenceKeypoint.new(1, THEME.Accent)
+    })
+    grad.Parent = stroke
+    task.spawn(function()
+        local rs = game:GetService("RunService")
+        local rot = 0
+        while stroke.Parent and grad.Parent do
+            rot = rot + 1.2
+            if rot >= 360 then rot = 0 end
+            grad.Rotation = rot
+            rs.RenderStepped:Wait()
+        end
+    end)
+    return grad
+end
 
 function ShowNotification(titulo, mensaje, color)
     local tweenService = game:GetService("TweenService")
@@ -80,9 +104,8 @@ function ShowNotification(titulo, mensaje, color)
     Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(40, 44, 58)
-    stroke.Thickness = 1
     stroke.Parent = card
+    _animateBorder(stroke, 1.2)
 
     local side = Instance.new("Frame")
     side.Size = UDim2.new(0, 5, 1, 0)
@@ -388,16 +411,7 @@ Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
 
 local btnStroke = Instance.new("UIStroke")
 btnStroke.Parent = toggleBtn
-btnStroke.Thickness = 2.5
-btnStroke.Color = Color3.new(1,1,1)
-
-local btnGradient = Instance.new("UIGradient")
-btnGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, THEME.Accent),
-    ColorSequenceKeypoint.new(0.5, THEME.AccentDark),
-    ColorSequenceKeypoint.new(1, THEME.Accent)
-}
-btnGradient.Parent = btnStroke
+_animateBorder(btnStroke, 2.5)
 
 toggleBtn.MouseEnter:Connect(function()
     TweenService:Create(toggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Back),
@@ -434,8 +448,7 @@ cloneQuickBtn.Parent = cloneDragFrame
 Instance.new("UICorner", cloneQuickBtn).CornerRadius = UDim.new(1, 0)
 
 local cloneQuickStroke = Instance.new("UIStroke", cloneQuickBtn)
-cloneQuickStroke.Color = THEME.Accent
-cloneQuickStroke.Thickness = 1.4
+_animateBorder(cloneQuickStroke, 1.4)
 
 do
     local dragging = false
@@ -493,8 +506,7 @@ do
     Instance.new("UICorner", floatQuickBtn).CornerRadius = UDim.new(1, 0)
 
     local floatQuickStroke = Instance.new("UIStroke", floatQuickBtn)
-    floatQuickStroke.Color = THEME.Accent
-    floatQuickStroke.Thickness = 1.4
+    _animateBorder(floatQuickStroke, 1.4)
 
     local dragging = false
     local dragInput, dragStart, startPos
@@ -634,8 +646,11 @@ do
     Instance.new("UICorner", respawnQuickBtn).CornerRadius = UDim.new(1, 0)
 
     local respawnQuickStroke = Instance.new("UIStroke", respawnQuickBtn)
-    respawnQuickStroke.Color = Color3.fromRGB(200, 50, 50)
-    respawnQuickStroke.Thickness = 1.4
+    _animateBorder(respawnQuickStroke, 1.4, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, THEME.Danger),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 20, 20)),
+        ColorSequenceKeypoint.new(1, THEME.Danger)
+    }))
 
     local dragging = false
     local dragInput, dragStart, startPos
@@ -791,17 +806,8 @@ uiScale.Scale = 0
 uiScale.Parent = mainDragFrame
 
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Thickness = 1.5
-mainStroke.Color = Color3.new(1,1,1)
 mainStroke.Parent = mainFrame
-
-local mainGradient = Instance.new("UIGradient")
-mainGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, THEME.Accent),
-    ColorSequenceKeypoint.new(0.5, THEME.AccentDark),
-    ColorSequenceKeypoint.new(1, THEME.Accent)
-}
-mainGradient.Parent = mainStroke
+_animateBorder(mainStroke, 1.5)
 
 local shadow = Instance.new("ImageLabel")
 shadow.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -879,9 +885,12 @@ confirmBox.Parent = overlayConfirm
 Instance.new("UICorner", confirmBox).CornerRadius = UDim.new(0, 10)
 
 local confirmStroke = Instance.new("UIStroke")
-confirmStroke.Color = THEME.Danger
-confirmStroke.Thickness = 1.5
 confirmStroke.Parent = confirmBox
+_animateBorder(confirmStroke, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0, THEME.Danger),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 20, 20)),
+    ColorSequenceKeypoint.new(1, THEME.Danger)
+}))
 
 local confirmScale = Instance.new("UIScale")
 confirmScale.Scale = 0
@@ -2030,8 +2039,7 @@ local function _autoStealUpdateVisuals(target)
         Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
 
         local stroke = Instance.new("UIStroke", bg)
-        stroke.Color = THEME.Accent
-        stroke.Thickness = 1.2
+        _animateBorder(stroke, 1.2)
 
         local nameLbl = Instance.new("TextLabel", bg)
         nameLbl.Name = "PetName"
@@ -2061,9 +2069,7 @@ local function _autoStealUpdateVisuals(target)
     end
 end
 
-local function _autoStealRefreshUi()
-    -- Botones eliminados
-end
+
 
 local function _autoStealUpdateTopList(sortedPets)
     if not _autoStealListScroll then return end
@@ -2103,8 +2109,11 @@ local function _autoStealUpdateTopList(sortedPets)
             if isTarget then
                 local stroke = Instance.new("UIStroke", item)
                 stroke.Name = "TargetStroke"
-                stroke.Color = Color3.fromRGB(0, 255, 100)
-                stroke.Thickness = 1
+                _animateBorder(stroke, 1.5, ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 100)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 150, 50)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 100))
+                }))
             end
 
             local rankLbl = Instance.new("TextLabel", item)
@@ -2152,8 +2161,11 @@ local function _autoStealUpdateTopList(sortedPets)
                 if isTarget and not stroke then
                     stroke = Instance.new("UIStroke", item)
                     stroke.Name = "TargetStroke"
-                    stroke.Color = Color3.fromRGB(0, 255, 100)
-                    stroke.Thickness = 1
+                    _animateBorder(stroke, 1.5, ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 100)),
+                        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 150, 50)),
+                        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 100))
+                    }))
                 elseif not isTarget and stroke then
                     stroke:Destroy()
                 end
@@ -2202,7 +2214,8 @@ local function _autoStealBuildGui()
     _autoStealFrame.Parent = _autoStealGui
     _bindGuiPosPersistence("AutoStealPanel", _autoStealFrame)
     Instance.new("UICorner", _autoStealFrame).CornerRadius = UDim.new(0, 10)
-    local s = Instance.new("UIStroke", _autoStealFrame); s.Color = THEME.Accent; s.Thickness = 1.3
+    local s = Instance.new("UIStroke", _autoStealFrame)
+    _animateBorder(s, 1.3)
     local title = Instance.new("TextLabel", _autoStealFrame)
     title.Size = UDim2.new(1, -10, 0, 24)
     title.Position = UDim2.new(0, 8, 0, 4)
@@ -2292,7 +2305,6 @@ local function _autoStealBuildGui()
     end)
 
     _autoStealApplyCompactState()
-    _autoStealRefreshUi()
 end
 
 local function _autoStealStartLoop()
@@ -2328,7 +2340,6 @@ local function _setAutoStealFeature(state)
         _autoStealManualTargetUid = nil
         _autoStealCurrentTargetUid = nil
         _autoStealCachedUidStr = ""
-        _autoStealRefreshUi()
         _autoStealClearVisuals()
         if _autoStealGui then _autoStealGui.Enabled = false end
     end
@@ -2672,8 +2683,7 @@ function _buildDesyncPanel()
     _bindGuiPosPersistence("DesyncPanel", _desyncPanel)
     Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
     local panelStroke = Instance.new("UIStroke", _desyncPanel)
-    panelStroke.Color = THEME.Accent
-    panelStroke.Thickness = 1.4
+    _animateBorder(panelStroke, 1.4)
 
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -20, 0, 25)
