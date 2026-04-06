@@ -22,7 +22,7 @@ local THEME = {
 
 function _animateBorder(stroke, thickness, colorSeq)
     if not stroke then return end
-    stroke.Thickness = thickness or 1.5
+    stroke.Thickness = (thickness or 1.5) + 1.2
     stroke.Color = Color3.new(1, 1, 1)
     local grad = Instance.new("UIGradient")
     grad.Color = colorSeq or ColorSequence.new({
@@ -539,8 +539,7 @@ do
     -- ==========================================
     local isFloating = false
     local loopConnection
-    local activeLV
-    local activeAttachment
+    local floatPart
     local targetHeight = 0
     local RISING_SPEED = 15
 
@@ -550,8 +549,7 @@ do
         floatQuickBtn.BackgroundColor3 = THEME.AccentDark
         
         if loopConnection then loopConnection:Disconnect() loopConnection = nil end
-        if activeLV then activeLV:Destroy() activeLV = nil end
-        if activeAttachment then activeAttachment:Destroy() activeAttachment = nil end
+        if floatPart then floatPart:Destroy() floatPart = nil end
     end
 
     local function startFloating()
@@ -563,22 +561,24 @@ do
         if not humanoid or not root then return end
         
         local studsToRise = 9
-        targetHeight = root.Position.Y + studsToRise
+        targetHeight = root.Position.Y - 3.5 + studsToRise
         
         isFloating = true
         floatQuickBtn.Text = "Float"
         floatQuickBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         
-        activeAttachment = Instance.new("Attachment")
-        activeAttachment.Parent = root
+        floatPart = Instance.new("Part")
+        floatPart.Name = "KYNFloatPlatform"
+        floatPart.Size = Vector3.new(6, 1, 6)
+        floatPart.Transparency = 1
+        floatPart.Anchored = true
+        floatPart.CanCollide = true
+        floatPart.Parent = Workspace
         
-        activeLV = Instance.new("LinearVelocity")
-        activeLV.Attachment0 = activeAttachment
-        activeLV.MaxForce = math.huge
-        activeLV.RelativeTo = Enum.ActuatorRelativeTo.World
-        activeLV.Parent = root
+        local startY = root.Position.Y - 3.5
+        floatPart.Position = Vector3.new(root.Position.X, startY, root.Position.Z)
         
-        loopConnection = RunService.RenderStepped:Connect(function()
+        loopConnection = RunService.Heartbeat:Connect(function(dt)
             local currentChar = LocalPlayer.Character
             if not currentChar then stopFloating() return end
             
@@ -589,18 +589,13 @@ do
                 return
             end
             
-            local currentPos = currentRoot.Position
-            local moveDir = currentHumanoid.MoveDirection
-            local walkSpeed = currentHumanoid.WalkSpeed
-            
-            local yVelocity = 0
-            
-            if currentPos.Y < targetHeight - 0.5 then
-                yVelocity = RISING_SPEED
-            else
-                yVelocity = 0
+            local currentY = floatPart.Position.Y
+            local newY = currentY
+            if currentY < targetHeight then
+                newY = math.min(currentY + (RISING_SPEED * dt), targetHeight)
             end
-            activeLV.VectorVelocity = (moveDir * walkSpeed) + Vector3.new(0, yVelocity, 0)
+            
+            floatPart.CFrame = CFrame.new(currentRoot.Position.X, newY, currentRoot.Position.Z)
         end)
     end
 
