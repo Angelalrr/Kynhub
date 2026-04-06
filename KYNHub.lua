@@ -451,6 +451,25 @@ Instance.new("UICorner", cloneQuickBtn).CornerRadius = UDim.new(1, 0)
 local cloneQuickStroke = Instance.new("UIStroke", cloneQuickBtn)
 _animateBorder(cloneQuickStroke, 1.4)
 
+local cloneBindLabel = Instance.new("TextButton")
+cloneBindLabel.Size = UDim2.new(1, 0, 0, 16)
+cloneBindLabel.Position = UDim2.new(0, 0, 1, 2)
+cloneBindLabel.BackgroundColor3 = THEME.FrameBg2
+cloneBindLabel.BackgroundTransparency = 0.3
+cloneBindLabel.TextColor3 = THEME.Accent
+cloneBindLabel.Font = Enum.Font.GothamBold
+cloneBindLabel.TextSize = 9
+cloneBindLabel.Text = SETTINGS.Keybinds["AutoClone"] and ("["..SETTINGS.Keybinds["AutoClone"].."]") or "[ BIND ]"
+cloneBindLabel.Parent = cloneDragFrame
+Instance.new("UICorner", cloneBindLabel).CornerRadius = UDim.new(0, 4)
+
+local cloneBinding = false
+cloneBindLabel.MouseButton1Click:Connect(function()
+    cloneBinding = true
+    cloneBindLabel.Text = "[ ... ]"
+    cloneBindLabel.TextColor3 = Color3.fromRGB(255, 180, 0)
+end)
+
 do
     local dragging = false
     local dragInput, dragStart, startPos
@@ -508,6 +527,25 @@ do
 
     local floatQuickStroke = Instance.new("UIStroke", floatQuickBtn)
     _animateBorder(floatQuickStroke, 1.4)
+
+    local floatBindLabel = Instance.new("TextButton")
+    floatBindLabel.Size = UDim2.new(1, 0, 0, 16)
+    floatBindLabel.Position = UDim2.new(0, 0, 1, 2)
+    floatBindLabel.BackgroundColor3 = THEME.FrameBg2
+    floatBindLabel.BackgroundTransparency = 0.3
+    floatBindLabel.TextColor3 = THEME.Accent
+    floatBindLabel.Font = Enum.Font.GothamBold
+    floatBindLabel.TextSize = 9
+    floatBindLabel.Text = SETTINGS.Keybinds["Float"] and ("["..SETTINGS.Keybinds["Float"].."]") or "[ BIND ]"
+    floatBindLabel.Parent = floatDragFrame
+    Instance.new("UICorner", floatBindLabel).CornerRadius = UDim.new(0, 4)
+
+    local floatBinding = false
+    floatBindLabel.MouseButton1Click:Connect(function()
+        floatBinding = true
+        floatBindLabel.Text = "[ ... ]"
+        floatBindLabel.TextColor3 = Color3.fromRGB(255, 180, 0)
+    end)
 
     local dragging = false
     local dragInput, dragStart, startPos
@@ -600,11 +638,33 @@ do
         end)
     end
 
-    floatQuickBtn.MouseButton1Click:Connect(function()
+    local function toggleFloat()
         if isFloating then
             stopFloating()
         else
             startFloating()
+        end
+    end
+
+    floatQuickBtn.MouseButton1Click:Connect(toggleFloat)
+
+    UIS.InputBegan:Connect(function(input, gp)
+        if floatBinding then
+            if input.KeyCode == Enum.KeyCode.Unknown then return end
+            if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then
+                SETTINGS.Keybinds["Float"] = nil
+                floatBindLabel.Text = "[ BIND ]"
+            else
+                SETTINGS.Keybinds["Float"] = input.KeyCode.Name
+                floatBindLabel.Text = "[" .. input.KeyCode.Name .. "]"
+            end
+            saveSettings()
+            floatBindLabel.TextColor3 = THEME.Accent
+            task.delay(0.1, function() floatBinding = false end)
+        elseif not gp then
+            if SETTINGS.Keybinds["Float"] and input.KeyCode.Name == SETTINGS.Keybinds["Float"] then
+                toggleFloat()
+            end
         end
     end)
     
