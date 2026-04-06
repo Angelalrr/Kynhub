@@ -211,6 +211,7 @@ local SETTINGS = {
     ShowRespawnButton = true,
     StealSpeedValue = 25,
     GuiPositions = {},
+    Keybinds = {},
 }
 
 local function saveSettings()
@@ -1024,6 +1025,10 @@ setActiveTab("Main")
 _G.KYNAddToggle = function(tabName, data)
     local tab = tabs[tabName]
     if not tab then return end
+    
+    SETTINGS.Keybinds = SETTINGS.Keybinds or {}
+    local toggleName = data.Name or "Toggle"
+
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -6, 0, 36)
     btn.BackgroundColor3 = THEME.ToggleBg
@@ -1031,7 +1036,7 @@ _G.KYNAddToggle = function(tabName, data)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 14
     btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Text = "   " .. (data.Name or "Toggle")
+    btn.Text = "   " .. toggleName
     btn.AutoButtonColor = false
     btn.Parent = tab
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -1050,7 +1055,20 @@ _G.KYNAddToggle = function(tabName, data)
     dot.Parent = track
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
 
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 55, 0, 20)
+    bindBtn.Position = UDim2.new(1, -115, 0.5, -10)
+    bindBtn.BackgroundColor3 = THEME.FrameBg2
+    bindBtn.TextColor3 = THEME.Accent
+    bindBtn.Font = Enum.Font.GothamBold
+    bindBtn.TextSize = 10
+    bindBtn.Text = SETTINGS.Keybinds[toggleName] and ("["..SETTINGS.Keybinds[toggleName].."]") or "[ BIND ]"
+    bindBtn.Parent = btn
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+
     local state = false
+    local binding = false
+
     local function apply(animated)
         if animated then
             TweenService:Create(dot, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -1066,16 +1084,48 @@ _G.KYNAddToggle = function(tabName, data)
         end
     end
 
-    btn.MouseButton1Click:Connect(function()
+    local function toggleState()
         state = not state
         apply(true)
         if data.Callback then pcall(data.Callback, state) end
         if state then
-            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " ACTIVADO", Color3.fromRGB(80, 255, 120))
+            ShowNotification("KYN HUB", toggleName .. " ACTIVADO", Color3.fromRGB(80, 255, 120))
         else
-            ShowNotification("KYN HUB", (data.Name or "Toggle") .. " DESACTIVADO", Color3.fromRGB(255, 90, 90))
+            ShowNotification("KYN HUB", toggleName .. " DESACTIVADO", Color3.fromRGB(255, 90, 90))
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        if binding then return end
+        toggleState()
+    end)
+
+    bindBtn.MouseButton1Click:Connect(function()
+        binding = true
+        bindBtn.Text = "[ ... ]"
+        bindBtn.TextColor3 = Color3.fromRGB(255, 180, 0)
+    end)
+
+    UIS.InputBegan:Connect(function(input, gp)
+        if binding then
+            if input.KeyCode == Enum.KeyCode.Unknown then return end
+            if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then
+                SETTINGS.Keybinds[toggleName] = nil
+                bindBtn.Text = "[ BIND ]"
+            else
+                SETTINGS.Keybinds[toggleName] = input.KeyCode.Name
+                bindBtn.Text = "[" .. input.KeyCode.Name .. "]"
+            end
+            saveSettings()
+            bindBtn.TextColor3 = THEME.Accent
+            task.delay(0.1, function() binding = false end)
+        elseif not gp then
+            if SETTINGS.Keybinds[toggleName] and input.KeyCode.Name == SETTINGS.Keybinds[toggleName] then
+                toggleState()
+            end
         end
     end)
+
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ToggleHover}):Play()
     end)
