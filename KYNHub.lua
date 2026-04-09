@@ -20,10 +20,13 @@ local THEME = {
     Danger         = Color3.fromRGB(255, 50, 70)
 }
 
+-- Animación de borde compatible con móvil
 function _animateBorder(stroke, thickness, colorSeq)
-    if not stroke then return end
-    stroke.Thickness = (thickness or 1.5) + 1.2
-    stroke.Color = Color3.new(1, 1, 1)
+    if not stroke then return nil end
+    pcall(function()
+        stroke.Thickness = (thickness or 1.5) + 1.2
+        stroke.Color = Color3.new(1, 1, 1)
+    end)
     local grad = Instance.new("UIGradient")
     grad.Color = colorSeq or ColorSequence.new({
         ColorSequenceKeypoint.new(0, THEME.Accent),
@@ -34,28 +37,33 @@ function _animateBorder(stroke, thickness, colorSeq)
     task.spawn(function()
         local rs = game:GetService("RunService")
         local rot = 0
-        while stroke.Parent and grad.Parent do
+        while stroke and stroke.Parent and grad and grad.Parent do
             rot = rot + 1.2
             if rot >= 360 then rot = 0 end
-            grad.Rotation = rot
+            pcall(function() grad.Rotation = rot end)
             rs.RenderStepped:Wait()
         end
     end)
     return grad
 end
 
+-- Notificación compatible con móvil
 function ShowNotification(titulo, mensaje, color)
     local tweenService = game:GetService("TweenService")
     local players = game:GetService("Players")
     local coreGui = game:GetService("CoreGui")
 
     local parentGui = coreGui
-    if type(gethui) == "function" then
-        local ok, hui = pcall(gethui)
-        if ok and typeof(hui) == "Instance" then
-            parentGui = hui
+    -- Intentar gethui de forma segura
+    pcall(function()
+        if typeof(gethui) == "function" then
+            local hui = gethui()
+            if typeof(hui) == "Instance" then
+                parentGui = hui
+            end
         end
-    end
+    end)
+    -- Fallback a PlayerGui si es necesario
     if not parentGui then
         local lp = players.LocalPlayer
         parentGui = lp and lp:FindFirstChildOfClass("PlayerGui") or coreGui
@@ -188,6 +196,46 @@ local ALLOWED_PLACE_ID = 109983668079237
 
 if game.PlaceId ~= ALLOWED_PLACE_ID then
     warn("[KYN Hub] PlaceId distinto al recomendado (" .. tostring(ALLOWED_PLACE_ID) .. "). Ejecutando en modo compatible.")
+end
+
+--// ======= SISTEMA DE ARRASTRE MOVIL =======
+local function setupMobileDrag(frame)
+    if not frame then return end
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - dragStart
+            pcall(function()
+                frame.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end)
+        end
+    end)
 end
 
 --// ======= SETTINGS PERSISTENTES =======
@@ -337,23 +385,27 @@ local function _notify(title, text, duration)
     ShowNotification(title, text, THEME.Accent)
 end
 
+-- Función segura para disparar señales (compatible con móvil)
 local function _safeFireSignal(signalObj)
     if not signalObj then return false end
-    if firesignal then
+    -- Intentar firesignal si existe
+    if typeof(firesignal) == "function" then
         local ok = pcall(function() firesignal(signalObj) end)
         if ok then return true end
     end
-    if getconnections then
-        local ok = pcall(function()
-            for _, conn in ipairs(getconnections(signalObj)) do
-                if conn.Fire then
-                    conn:Fire()
-                elseif conn.Function then
-                    conn.Function()
-                end
+    -- Intentar getconnections si existe
+    if typeof(getconnections) == "function" then
+        local ok, conns = pcall(getconnections, signalObj)
+        if ok and conns then
+            for _, conn in ipairs(conns) do
+                pcall(function()
+                    if typeof(conn) == "table" then
+                        if conn.Fire then conn:Fire() end
+                    end
+                end)
             end
-        end)
-        if ok then return true end
+            return true
+        end
     end
     return false
 end
@@ -397,8 +449,8 @@ btnDragFrame.Size = UDim2.new(0, 55, 0, 55)
 btnDragFrame.Position = _loadGuiPos("OpenButton", UDim2.new(0, 20, 0.2, 0))
 btnDragFrame.BackgroundTransparency = 1
 btnDragFrame.Active = true
-btnDragFrame.Draggable = true
 btnDragFrame.Parent = gui
+setupMobileDrag(btnDragFrame)
 _bindGuiPosPersistence("OpenButton", btnDragFrame)
 _ensureGuiOnScreen("OpenButton", btnDragFrame, UDim2.new(0, 20, 0.2, 0))
 
@@ -431,8 +483,8 @@ cloneDragFrame.Size = UDim2.new(0, 56, 0, 56)
 cloneDragFrame.Position = _loadGuiPos("CloneButton", UDim2.new(1, -74, 0.45, 0))
 cloneDragFrame.BackgroundTransparency = 1
 cloneDragFrame.Active = true
-cloneDragFrame.Draggable = true
 cloneDragFrame.Parent = gui
+setupMobileDrag(cloneDragFrame)
 cloneDragFrame.Visible = SETTINGS.ShowAutoCloneButton
 _bindGuiPosPersistence("CloneButton", cloneDragFrame)
 _ensureGuiOnScreen("CloneButton", cloneDragFrame, UDim2.new(1, -74, 0.45, 0))
@@ -508,8 +560,8 @@ do
     floatDragFrame.Position = _loadGuiPos("FloatButton", UDim2.new(1, -74, 0.55, 0))
     floatDragFrame.BackgroundTransparency = 1
     floatDragFrame.Active = true
-    floatDragFrame.Draggable = true
     floatDragFrame.Parent = gui
+    setupMobileDrag(floatDragFrame)
     floatDragFrame.Visible = SETTINGS.ShowFloatButton
     _bindGuiPosPersistence("FloatButton", floatDragFrame)
     _ensureGuiOnScreen("FloatButton", floatDragFrame, UDim2.new(1, -74, 0.55, 0))
@@ -683,8 +735,8 @@ do
     respawnDragFrame.Position = _loadGuiPos("RespawnButton", UDim2.new(1, -74, 0.65, 0))
     respawnDragFrame.BackgroundTransparency = 1
     respawnDragFrame.Active = true
-    respawnDragFrame.Draggable = true
     respawnDragFrame.Parent = gui
+    setupMobileDrag(respawnDragFrame)
     respawnDragFrame.Visible = SETTINGS.ShowRespawnButton
     _bindGuiPosPersistence("RespawnButton", respawnDragFrame)
     _ensureGuiOnScreen("RespawnButton", respawnDragFrame, UDim2.new(1, -74, 0.65, 0))
@@ -845,8 +897,8 @@ mainDragFrame.Size = UDim2.new(0, 270, 0, 300)
 mainDragFrame.Position = _loadGuiPos("MainPanel", UDim2.new(0.5, -135, 0.5, -150))
 mainDragFrame.BackgroundTransparency = 1
 mainDragFrame.Active = true
-mainDragFrame.Draggable = true
 mainDragFrame.Visible = false
+setupMobileDrag(mainDragFrame)
 mainDragFrame.Parent = gui
 _bindGuiPosPersistence("MainPanel", mainDragFrame)
 _ensureGuiOnScreen("MainPanel", mainDragFrame, UDim2.new(0.5, -135, 0.5, -150))
@@ -1254,14 +1306,16 @@ _G.KYNAddLabel = function(tabName, text)
     Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 6)
 end
 
+-- Animación del borde y botón flotante (corregido para móvil)
 local _animSpeed = 2.5
 local _animDist  = 6
 RunService.RenderStepped:Connect(function()
-    btnGradient.Rotation  = (btnGradient.Rotation  + 2)   % 360
-    mainGradient.Rotation = (mainGradient.Rotation + 1.5) % 360
     local wave = math.sin(tick() * _animSpeed) * _animDist
-    toggleBtn.Position = UDim2.new(0, 0, 0, wave)
-    mainFrame.Position = UDim2.new(0, 0, 0, wave)
+    if toggleBtn and toggleBtn.Parent then
+        pcall(function()
+            toggleBtn.Position = UDim2.new(0, 0, 0, wave)
+        end)
+    end
 end)
 
 local isOpen, isAnimating = false, false
@@ -2315,8 +2369,8 @@ local function _autoStealBuildGui()
     _autoStealFrame.BackgroundColor3 = THEME.FrameBg
     _autoStealFrame.BorderSizePixel = 0
     _autoStealFrame.Active = true
-    _autoStealFrame.Draggable = true
     _autoStealFrame.Parent = _autoStealGui
+    setupMobileDrag(_autoStealFrame)
     _bindGuiPosPersistence("AutoStealPanel", _autoStealFrame)
     Instance.new("UICorner", _autoStealFrame).CornerRadius = UDim.new(0, 10)
     local s = Instance.new("UIStroke", _autoStealFrame)
@@ -2783,8 +2837,8 @@ function _buildDesyncPanel()
     _desyncPanel.BackgroundColor3 = THEME.FrameBg
     _desyncPanel.BorderSizePixel = 0
     _desyncPanel.Active = true
-    _desyncPanel.Draggable = true
     _desyncPanel.Parent = _desyncGui
+    setupMobileDrag(_desyncPanel)
     _bindGuiPosPersistence("DesyncPanel", _desyncPanel)
     Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
     local panelStroke = Instance.new("UIStroke", _desyncPanel)
