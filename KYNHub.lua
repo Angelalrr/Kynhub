@@ -2537,31 +2537,27 @@ function _antiBeeDisable()
     _antiBeeDiscoConns = {}
 end
 
-local _desyncLoaded = false
-local _desyncGui, _desyncPanel = nil, nil
-local _desyncToggleButton = nil
-local _desyncAutoToggleButton = nil
-local _desyncStatusLabel = nil
-local _desyncStatusCircle = nil
-local _desyncCloneWatchConn = nil
-local _desyncRubberbandLoop = nil
-local _desyncServerGhost = nil
-local _desyncWorldAddedConn = nil
-local _desyncIsActive = false
-local _desyncAutoActivate = SETTINGS.AutoDesyncAutoActivate and true or false
-local _desyncStealEnabled = true
-local _desyncStealSpeed = math.clamp(tonumber(SETTINGS.StealSpeedValue) or 25, 5, 100)
-local _desyncStealMin, _desyncStealMax = 5, 100
-local _desyncStealConn = nil
-local _desyncLastPlayerPos = nil
-local _desyncLagbackWarningEndTime = 0
-local _desyncIgnoringTeleport = false
-local _desyncToolName = "Quantum Cloner"
-local _desyncCloneName = tostring(LocalPlayer.UserId) .. "_Clone"
-local _desyncStealSpeedLabel = nil
-local _desyncStealSliderBg = nil
-local _desyncStealSliderFill = nil
-local _desyncStealSliderKnob = nil
+-- Tabla unificada para reducir registros locales
+local DS = {
+    Loaded = false,
+    Gui = nil, Panel = nil,
+    ToggleBtn = nil, AutoToggleBtn = nil,
+    StatusLbl = nil, StatusCircle = nil,
+    CloneWatchConn = nil, RubberbandLoop = nil,
+    ServerGhost = nil, WorldAddedConn = nil,
+    IsActive = false,
+    AutoActivate = SETTINGS.AutoDesyncAutoActivate and true or false,
+    StealEnabled = true,
+    StealSpeed = math.clamp(tonumber(SETTINGS.StealSpeedValue) or 25, 5, 100),
+    StealMin = 5, StealMax = 100,
+    StealConn = nil,
+    LastPlayerPos = nil,
+    LagbackWarningEnd = 0,
+    IgnoringTeleport = false,
+    ToolName = "Quantum Cloner",
+    CloneName = tostring(LocalPlayer.UserId) .. "_Clone",
+    SpeedLbl = nil, SliderBg = nil, SliderFill = nil, SliderKnob = nil
+}
 
 local _desyncHighlight = Instance.new("Highlight")
 _desyncHighlight.Name = "KYN_RubberbandHighlight"
@@ -2570,44 +2566,44 @@ _desyncHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
 _desyncHighlight.Enabled = false
 _desyncHighlight.Parent = _resolveGuiParent()
 
-function _desyncSetButtonUI()
-    if not _desyncToggleButton then return end
-    if _desyncIsActive then
-        _desyncToggleButton.Text = "DESYNC: ACTIVADO"
-        _desyncToggleButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+function DS.SetButtonUI()
+    if not DS.ToggleBtn then return end
+    if DS.IsActive then
+        DS.ToggleBtn.Text = "DESYNC: ACTIVADO"
+        DS.ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
     else
-        _desyncToggleButton.Text = "DESYNC: DESACTIVADO"
-        _desyncToggleButton.BackgroundColor3 = THEME.FrameBg2
+        DS.ToggleBtn.Text = "DESYNC: DESACTIVADO"
+        DS.ToggleBtn.BackgroundColor3 = THEME.FrameBg2
     end
 end
 
 function _desyncUpdateStatusUI()
-    if _desyncStatusLabel then
-        _desyncStatusLabel.Text = _desyncIsActive and "Activador: Activado" or "Activador: Desactivado"
-        _desyncStatusLabel.TextColor3 = _desyncIsActive and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(180, 180, 180)
+    if DS.StatusLbl then
+        DS.StatusLbl.Text = DS.IsActive and "Activador: Activado" or "Activador: Desactivado"
+        DS.StatusLbl.TextColor3 = DS.IsActive and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(180, 180, 180)
     end
-    if _desyncStatusCircle then
-        _desyncStatusCircle.BackgroundColor3 = _desyncIsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
+    if DS.StatusCircle then
+        DS.StatusCircle.BackgroundColor3 = DS.IsActive and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(90, 90, 95)
     end
-    if _desyncAutoToggleButton then
-        _desyncAutoToggleButton.Text = _desyncAutoActivate and "Auto desync: ON" or "Auto desync: OFF"
-        _desyncAutoToggleButton.BackgroundColor3 = _desyncAutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
+    if DS.AutoToggleBtn then
+        DS.AutoToggleBtn.Text = DS.AutoActivate and "Auto desync: ON" or "Auto desync: OFF"
+        DS.AutoToggleBtn.BackgroundColor3 = DS.AutoActivate and Color3.fromRGB(40, 130, 65) or THEME.FrameBg2
     end
 end
 
 function _desyncUpdateStealUI()
-    if _desyncStealSpeedLabel then
-        _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
+    if DS.StealSpeedLabel then
+        DS.StealSpeedLabel.Text = "Velocidad: " .. tostring(DS.StealSpeed)
     end
-    local percent = (_desyncStealSpeed - _desyncStealMin) / (_desyncStealMax - _desyncStealMin)
-    if _desyncStealSliderFill then _desyncStealSliderFill.Size = UDim2.new(percent, 0, 1, 0) end
-    if _desyncStealSliderKnob then _desyncStealSliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
+    local percent = (DS.StealSpeed - DS.StealMin) / (DS.StealMax - DS.StealMin)
+    if DS.SliderFill then DS.SliderFill.Size = UDim2.new(percent, 0, 1, 0) end
+    if DS.SliderKnob then DS.SliderKnob.Position = UDim2.new(percent, 0, 0.5, 0) end
 end
 
 function _desyncEnsureStealLoop()
-    if _desyncStealConn then return end
-    _desyncStealConn = RunService.Heartbeat:Connect(function()
-        if not _desyncStealEnabled then return end
+    if DS.StealConn then return end
+    DS.StealConn = RunService.Heartbeat:Connect(function()
+        if not DS.StealEnabled then return end
         if LocalPlayer:GetAttribute("Stealing") ~= true then return end
         local char = LocalPlayer.Character
         if not char then return end
@@ -2617,9 +2613,9 @@ function _desyncEnsureStealLoop()
             local md = hum.MoveDirection
             if md.Magnitude > 0 then
                 hrp.AssemblyLinearVelocity = Vector3.new(
-                    md.X * _desyncStealSpeed,
+                    md.X * DS.StealSpeed,
                     hrp.AssemblyLinearVelocity.Y,
-                    md.Z * _desyncStealSpeed
+                    md.Z * DS.StealSpeed
                 )
             end
         end
@@ -2627,28 +2623,28 @@ function _desyncEnsureStealLoop()
 end
 
 function _desyncCreateServerGhost(character)
-    if _desyncServerGhost then _desyncServerGhost:Destroy() end
-    _desyncServerGhost = Instance.new("Part")
-    _desyncServerGhost.Name = "KYN_DesyncedServerPosition"
-    _desyncServerGhost.Size = Vector3.new(2.5, 2.5, 2.5)
-    _desyncServerGhost.Shape = Enum.PartType.Block
-    _desyncServerGhost.Anchored = true
-    _desyncServerGhost.CanCollide = false
-    _desyncServerGhost.CanTouch = false
-    _desyncServerGhost.CanQuery = false
-    _desyncServerGhost.Material = Enum.Material.ForceField
-    _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
-    _desyncServerGhost.Transparency = 0.2
+    if DS.ServerGhost then DS.ServerGhost:Destroy() end
+    DS.ServerGhost = Instance.new("Part")
+    DS.ServerGhost.Name = "KYN_DesyncedServerPosition"
+    DS.ServerGhost.Size = Vector3.new(2.5, 2.5, 2.5)
+    DS.ServerGhost.Shape = Enum.PartType.Block
+    DS.ServerGhost.Anchored = true
+    DS.ServerGhost.CanCollide = false
+    DS.ServerGhost.CanTouch = false
+    DS.ServerGhost.CanQuery = false
+    DS.ServerGhost.Material = Enum.Material.ForceField
+    DS.ServerGhost.Color = Color3.fromRGB(0, 150, 255)
+    DS.ServerGhost.Transparency = 0.2
 
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if hrp then _desyncServerGhost.CFrame = hrp.CFrame end
+    if hrp then DS.ServerGhost.CFrame = hrp.CFrame end
 
     local bg = Instance.new("BillboardGui")
     bg.Name = "ServerPosGui"
     bg.Size = UDim2.new(0, 250, 0, 50)
     bg.StudsOffset = Vector3.new(0, 2.5, 0)
     bg.AlwaysOnTop = true
-    bg.Parent = _desyncServerGhost
+    bg.Parent = DS.ServerGhost
 
     local txt = Instance.new("TextLabel")
     txt.Name = "ServerText"
@@ -2661,42 +2657,42 @@ function _desyncCreateServerGhost(character)
     txt.TextScaled = true
     txt.Parent = bg
 
-    _desyncServerGhost.Parent = Workspace
-    _desyncHighlight.Adornee = _desyncServerGhost
+    DS.ServerGhost.Parent = Workspace
+    _desyncHighlight.Adornee = DS.ServerGhost
     _desyncHighlight.Enabled = true
 end
 
 function _desyncUpdateHighlight()
-    if not _desyncIsActive or not _desyncServerGhost then return end
+    if not DS.IsActive or not DS.ServerGhost then return end
     local char = LocalPlayer.Character
     if not char then return end
     local realHRP = char:FindFirstChild("HumanoidRootPart")
     if not realHRP then return end
 
     local currentPos = realHRP.Position
-    if _desyncLastPlayerPos then
-        local distanceJump = (currentPos - _desyncLastPlayerPos).Magnitude
+    if DS.LastPlayerPos then
+        local distanceJump = (currentPos - DS.LastPlayerPos).Magnitude
         if distanceJump > 2.5 then
-            _desyncServerGhost.CFrame = realHRP.CFrame
-            if not _desyncIgnoringTeleport then
-                _desyncLagbackWarningEndTime = os.clock() + 2.5
+            DS.ServerGhost.CFrame = realHRP.CFrame
+            if not DS.IgnoringTeleport then
+                DS.LagbackWarningEnd = os.clock() + 2.5
             end
         end
     end
-    _desyncLastPlayerPos = currentPos
+    DS.LastPlayerPos = currentPos
 
-    local distFromServerPos = (currentPos - _desyncServerGhost.Position).Magnitude
-    local bg = _desyncServerGhost:FindFirstChild("ServerPosGui")
+    local distFromServerPos = (currentPos - DS.ServerGhost.Position).Magnitude
+    local bg = DS.ServerGhost:FindFirstChild("ServerPosGui")
     local txt = bg and bg:FindFirstChild("ServerText")
-    if os.clock() < _desyncLagbackWarningEndTime then
-        _desyncServerGhost.Color = Color3.fromRGB(255, 0, 0)
+    if os.clock() < DS.LagbackWarningEnd then
+        DS.ServerGhost.Color = Color3.fromRGB(255, 0, 0)
         _desyncHighlight.FillColor = Color3.fromRGB(255, 0, 0)
         if txt then
             txt.Text = "⚠️ LAGBACK DETECTADO ⚠️"
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         end
     else
-        _desyncServerGhost.Color = Color3.fromRGB(0, 150, 255)
+        DS.ServerGhost.Color = Color3.fromRGB(0, 150, 255)
         _desyncHighlight.FillColor = Color3.fromRGB(0, 150, 255)
         if txt then
             txt.Text = string.format("Server Position\n(Distancia: %.1f studs)", distFromServerPos)
@@ -2727,9 +2723,9 @@ function _desyncApplyToClone(clone, hide)
     for _, obj in ipairs(clone:GetDescendants()) do
         _desyncSetHiddenState(obj, hide)
     end
-    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
+    if DS.CloneWatchConn then DS.CloneWatchConn:Disconnect() DS.CloneWatchConn = nil end
     if hide then
-        _desyncCloneWatchConn = clone.DescendantAdded:Connect(function(obj)
+        DS.CloneWatchConn = clone.DescendantAdded:Connect(function(obj)
             _desyncSetHiddenState(obj, true)
         end)
     end
@@ -2738,12 +2734,12 @@ end
 function _desyncGetTool()
     local character = LocalPlayer.Character
     if character then
-        local tool = character:FindFirstChild(_desyncToolName)
+        local tool = character:FindFirstChild(DS.ToolName)
         if tool and tool:IsA("Tool") then return tool end
     end
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
-        local tool = backpack:FindFirstChild(_desyncToolName)
+        local tool = backpack:FindFirstChild(DS.ToolName)
         if tool and tool:IsA("Tool") then return tool end
     end
     return nil
@@ -2765,7 +2761,7 @@ end
 function _desyncTryFindClone(timeoutSeconds)
     local start = os.clock()
     while os.clock() - start < timeoutSeconds do
-        local clone = Workspace:FindFirstChild(_desyncCloneName, true)
+        local clone = Workspace:FindFirstChild(DS.CloneName, true)
         if clone and clone:IsA("Model") then return clone end
         task.wait(0.05)
     end
@@ -2782,10 +2778,10 @@ function _desyncTriggerTeleportSafely()
         if not qcFrame then return end
         local teleportBtn = qcFrame:WaitForChild("TeleportToClone", 2)
         if teleportBtn and teleportBtn:IsA("GuiButton") then
-            _desyncIgnoringTeleport = true
+            DS.IgnoringTeleport = true
             _safeFireSignal(teleportBtn.MouseButton1Up)
             qcFrame.Visible = false
-            task.delay(1, function() _desyncIgnoringTeleport = false end)
+            task.delay(1, function() DS.IgnoringTeleport = false end)
         end
     end)
 end
@@ -2793,14 +2789,14 @@ end
 function _desyncActivate()
     local char = LocalPlayer.Character
     if not char then return end
-    _desyncIsActive = true
-    _desyncSetButtonUI()
+    DS.IsActive = true
+    DS.SetButtonUI()
     _desyncUpdateStatusUI()
     _desyncCreateServerGhost(char)
     pcall(function() raknet.desync(true) end)
-    _desyncLastPlayerPos = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position or nil
-    if not _desyncRubberbandLoop then
-        _desyncRubberbandLoop = RunService.Heartbeat:Connect(_desyncUpdateHighlight)
+    DS.LastPlayerPos = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position or nil
+    if not DS.RubberbandLoop then
+        DS.RubberbandLoop = RunService.Heartbeat:Connect(_desyncUpdateHighlight)
     end
 
     if _desyncEquipAndUseTool() then
@@ -2814,34 +2810,34 @@ function _desyncActivate()
 end
 
 function _desyncDeactivate()
-    _desyncIsActive = false
-    _desyncSetButtonUI()
+    DS.IsActive = false
+    DS.SetButtonUI()
     _desyncUpdateStatusUI()
     pcall(function() raknet.desync(false) end)
-    if _desyncRubberbandLoop then _desyncRubberbandLoop:Disconnect() _desyncRubberbandLoop = nil end
-    if _desyncCloneWatchConn then _desyncCloneWatchConn:Disconnect() _desyncCloneWatchConn = nil end
+    if DS.RubberbandLoop then DS.RubberbandLoop:Disconnect() DS.RubberbandLoop = nil end
+    if DS.CloneWatchConn then DS.CloneWatchConn:Disconnect() DS.CloneWatchConn = nil end
     _desyncHighlight.Enabled = false
-    if _desyncServerGhost then _desyncServerGhost:Destroy() _desyncServerGhost = nil end
-    local clone = Workspace:FindFirstChild(_desyncCloneName, true)
+    if DS.ServerGhost then DS.ServerGhost:Destroy() DS.ServerGhost = nil end
+    local clone = Workspace:FindFirstChild(DS.CloneName, true)
     if clone then _desyncApplyToClone(clone, false) end
 end
 
 function _buildDesyncPanel()
-    if _desyncGui then pcall(function() _desyncGui:Destroy() end) end
-    _desyncGui = _createScreenGui("KYN_DesyncGUI")
+    if DS.Gui then pcall(function() DS.Gui:Destroy() end) end
+    DS.Gui = _createScreenGui("KYN_DesyncGUI")
 
-    _desyncPanel = Instance.new("Frame")
-    _desyncPanel.Name = "KYN_DesyncPanel"
-    _desyncPanel.Size = UDim2.new(0, 250, 0, 250)
-    _desyncPanel.Position = _loadGuiPos("DesyncPanel", UDim2.new(1, -265, 0.55, -125))
-    _desyncPanel.BackgroundColor3 = THEME.FrameBg
-    _desyncPanel.BorderSizePixel = 0
-    _desyncPanel.Active = true
-    _desyncPanel.Parent = _desyncGui
-    setupMobileDrag(_desyncPanel)
-    _bindGuiPosPersistence("DesyncPanel", _desyncPanel)
-    Instance.new("UICorner", _desyncPanel).CornerRadius = UDim.new(0, 10)
-    local panelStroke = Instance.new("UIStroke", _desyncPanel)
+    DS.Panel = Instance.new("Frame")
+    DS.Panel.Name = "KYN_DesyncPanel"
+    DS.Panel.Size = UDim2.new(0, 250, 0, 250)
+    DS.Panel.Position = _loadGuiPos("DesyncPanel", UDim2.new(1, -265, 0.55, -125))
+    DS.Panel.BackgroundColor3 = THEME.FrameBg
+    DS.Panel.BorderSizePixel = 0
+    DS.Panel.Active = true
+    DS.Panel.Parent = DS.Gui
+    setupMobileDrag(DS.Panel)
+    _bindGuiPosPersistence("DesyncPanel", DS.Panel)
+    Instance.new("UICorner", DS.Panel).CornerRadius = UDim.new(0, 10)
+    local panelStroke = Instance.new("UIStroke", DS.Panel)
     _animateBorder(panelStroke, 1.4)
 
     local title = Instance.new("TextLabel")
@@ -2853,9 +2849,9 @@ function _buildDesyncPanel()
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = _desyncPanel
+    title.Parent = DS.Panel
 
-    local _desyncMinimizeBtn = Instance.new("TextButton", _desyncPanel)
+    local _desyncMinimizeBtn = Instance.new("TextButton", DS.Panel)
     _desyncMinimizeBtn.Size = UDim2.new(0, 22, 0, 20)
     _desyncMinimizeBtn.Position = UDim2.new(1, -28, 0, 7)
     _desyncMinimizeBtn.BackgroundColor3 = THEME.FrameBg2
@@ -2869,112 +2865,112 @@ function _buildDesyncPanel()
     local isDesyncMinimized = false
     _desyncMinimizeBtn.MouseButton1Click:Connect(function()
         isDesyncMinimized = not isDesyncMinimized
-        _desyncPanel.Size = isDesyncMinimized and UDim2.new(0, 250, 0, 35) or UDim2.new(0, 250, 0, 250)
+        DS.Panel.Size = isDesyncMinimized and UDim2.new(0, 250, 0, 35) or UDim2.new(0, 250, 0, 250)
         _desyncMinimizeBtn.Text = isDesyncMinimized and "+" or "-"
-        for _, child in ipairs(_desyncPanel:GetChildren()) do
+        for _, child in ipairs(DS.Panel:GetChildren()) do
             if child ~= title and child ~= _desyncMinimizeBtn and child:IsA("GuiObject") then
                 child.Visible = not isDesyncMinimized
             end
         end
     end)
 
-    _desyncStatusCircle = Instance.new("Frame")
-    _desyncStatusCircle.Size = UDim2.new(0, 12, 0, 12)
-    _desyncStatusCircle.Position = UDim2.new(0, 12, 0, 38)
-    _desyncStatusCircle.BackgroundColor3 = Color3.fromRGB(90, 90, 95)
-    _desyncStatusCircle.BorderSizePixel = 0
-    _desyncStatusCircle.Parent = _desyncPanel
-    Instance.new("UICorner", _desyncStatusCircle).CornerRadius = UDim.new(1, 0)
+    DS.StatusCircle = Instance.new("Frame")
+    DS.StatusCircle.Size = UDim2.new(0, 12, 0, 12)
+    DS.StatusCircle.Position = UDim2.new(0, 12, 0, 38)
+    DS.StatusCircle.BackgroundColor3 = Color3.fromRGB(90, 90, 95)
+    DS.StatusCircle.BorderSizePixel = 0
+    DS.StatusCircle.Parent = DS.Panel
+    Instance.new("UICorner", DS.StatusCircle).CornerRadius = UDim.new(1, 0)
 
-    _desyncStatusLabel = Instance.new("TextLabel")
-    _desyncStatusLabel.Size = UDim2.new(1, -32, 0, 18)
-    _desyncStatusLabel.Position = UDim2.new(0, 30, 0, 35)
-    _desyncStatusLabel.BackgroundTransparency = 1
-    _desyncStatusLabel.Text = "Activador: Desactivado"
-    _desyncStatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-    _desyncStatusLabel.Font = Enum.Font.GothamMedium
-    _desyncStatusLabel.TextSize = 13
-    _desyncStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    _desyncStatusLabel.Parent = _desyncPanel
+    DS.StatusLbl = Instance.new("TextLabel")
+    DS.StatusLbl.Size = UDim2.new(1, -32, 0, 18)
+    DS.StatusLbl.Position = UDim2.new(0, 30, 0, 35)
+    DS.StatusLbl.BackgroundTransparency = 1
+    DS.StatusLbl.Text = "Activador: Desactivado"
+    DS.StatusLbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+    DS.StatusLbl.Font = Enum.Font.GothamMedium
+    DS.StatusLbl.TextSize = 13
+    DS.StatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    DS.StatusLbl.Parent = DS.Panel
 
-    _desyncAutoToggleButton = Instance.new("TextButton")
-    _desyncAutoToggleButton.Size = UDim2.new(1, -20, 0, 32)
-    _desyncAutoToggleButton.Position = UDim2.new(0, 10, 0, 58)
-    _desyncAutoToggleButton.BackgroundColor3 = THEME.FrameBg2
-    _desyncAutoToggleButton.TextColor3 = THEME.TextLight
-    _desyncAutoToggleButton.Font = Enum.Font.GothamBold
-    _desyncAutoToggleButton.TextSize = 13
-    _desyncAutoToggleButton.AutoButtonColor = true
-    _desyncAutoToggleButton.Parent = _desyncPanel
-    Instance.new("UICorner", _desyncAutoToggleButton).CornerRadius = UDim.new(0, 8)
+    DS.AutoToggleBtn = Instance.new("TextButton")
+    DS.AutoToggleBtn.Size = UDim2.new(1, -20, 0, 32)
+    DS.AutoToggleBtn.Position = UDim2.new(0, 10, 0, 58)
+    DS.AutoToggleBtn.BackgroundColor3 = THEME.FrameBg2
+    DS.AutoToggleBtn.TextColor3 = THEME.TextLight
+    DS.AutoToggleBtn.Font = Enum.Font.GothamBold
+    DS.AutoToggleBtn.TextSize = 13
+    DS.AutoToggleBtn.AutoButtonColor = true
+    DS.AutoToggleBtn.Parent = DS.Panel
+    Instance.new("UICorner", DS.AutoToggleBtn).CornerRadius = UDim.new(0, 8)
 
-    _desyncToggleButton = Instance.new("TextButton")
-    _desyncToggleButton.Size = UDim2.new(1, -20, 0, 45)
-    _desyncToggleButton.Position = UDim2.new(0, 10, 0, 98)
-    _desyncToggleButton.BackgroundColor3 = THEME.FrameBg2
-    _desyncToggleButton.TextColor3 = Color3.new(1, 1, 1)
-    _desyncToggleButton.Font = Enum.Font.GothamBold
-    _desyncToggleButton.TextScaled = true
-    _desyncToggleButton.AutoButtonColor = true
-    _desyncToggleButton.Parent = _desyncPanel
-    Instance.new("UICorner", _desyncToggleButton).CornerRadius = UDim.new(0, 8)
+    DS.ToggleBtn = Instance.new("TextButton")
+    DS.ToggleBtn.Size = UDim2.new(1, -20, 0, 45)
+    DS.ToggleBtn.Position = UDim2.new(0, 10, 0, 98)
+    DS.ToggleBtn.BackgroundColor3 = THEME.FrameBg2
+    DS.ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+    DS.ToggleBtn.Font = Enum.Font.GothamBold
+    DS.ToggleBtn.TextScaled = true
+    DS.ToggleBtn.AutoButtonColor = true
+    DS.ToggleBtn.Parent = DS.Panel
+    Instance.new("UICorner", DS.ToggleBtn).CornerRadius = UDim.new(0, 8)
 
-    _desyncStealSpeedLabel = Instance.new("TextLabel")
-    _desyncStealSpeedLabel.Size = UDim2.new(1, -20, 0, 20)
-    _desyncStealSpeedLabel.Position = UDim2.new(0, 10, 0, 152)
-    _desyncStealSpeedLabel.BackgroundTransparency = 1
-    _desyncStealSpeedLabel.Text = "Velocidad: " .. tostring(_desyncStealSpeed)
-    _desyncStealSpeedLabel.TextColor3 = THEME.TextLight
-    _desyncStealSpeedLabel.Font = Enum.Font.GothamBold
-    _desyncStealSpeedLabel.TextSize = 13
-    _desyncStealSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
-    _desyncStealSpeedLabel.Parent = _desyncPanel
+    DS.StealSpeedLabel = Instance.new("TextLabel")
+    DS.StealSpeedLabel.Size = UDim2.new(1, -20, 0, 20)
+    DS.StealSpeedLabel.Position = UDim2.new(0, 10, 0, 152)
+    DS.StealSpeedLabel.BackgroundTransparency = 1
+    DS.StealSpeedLabel.Text = "Velocidad: " .. tostring(DS.StealSpeed)
+    DS.StealSpeedLabel.TextColor3 = THEME.TextLight
+    DS.StealSpeedLabel.Font = Enum.Font.GothamBold
+    DS.StealSpeedLabel.TextSize = 13
+    DS.StealSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    DS.StealSpeedLabel.Parent = DS.Panel
 
-    _desyncStealSliderBg = Instance.new("Frame")
-    _desyncStealSliderBg.Size = UDim2.new(1, -20, 0, 6)
-    _desyncStealSliderBg.Position = UDim2.new(0, 10, 0, 178)
-    _desyncStealSliderBg.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
-    _desyncStealSliderBg.BorderSizePixel = 0
-    _desyncStealSliderBg.Parent = _desyncPanel
-    Instance.new("UICorner", _desyncStealSliderBg).CornerRadius = UDim.new(1, 0)
+    DS.SliderBg = Instance.new("Frame")
+    DS.SliderBg.Size = UDim2.new(1, -20, 0, 6)
+    DS.SliderBg.Position = UDim2.new(0, 10, 0, 178)
+    DS.SliderBg.BackgroundColor3 = Color3.fromRGB(40, 42, 48)
+    DS.SliderBg.BorderSizePixel = 0
+    DS.SliderBg.Parent = DS.Panel
+    Instance.new("UICorner", DS.SliderBg).CornerRadius = UDim.new(1, 0)
 
-    _desyncStealSliderFill = Instance.new("Frame")
-    _desyncStealSliderFill.Size = UDim2.new(0, 0, 1, 0)
-    _desyncStealSliderFill.BackgroundColor3 = THEME.Accent
-    _desyncStealSliderFill.BorderSizePixel = 0
-    _desyncStealSliderFill.Parent = _desyncStealSliderBg
-    Instance.new("UICorner", _desyncStealSliderFill).CornerRadius = UDim.new(1, 0)
+    DS.SliderFill = Instance.new("Frame")
+    DS.SliderFill.Size = UDim2.new(0, 0, 1, 0)
+    DS.SliderFill.BackgroundColor3 = THEME.Accent
+    DS.SliderFill.BorderSizePixel = 0
+    DS.SliderFill.Parent = DS.SliderBg
+    Instance.new("UICorner", DS.SliderFill).CornerRadius = UDim.new(1, 0)
 
-    _desyncStealSliderKnob = Instance.new("Frame")
-    _desyncStealSliderKnob.Size = UDim2.new(0, 14, 0, 14)
-    _desyncStealSliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
-    _desyncStealSliderKnob.Position = UDim2.new(0, 0, 0.5, 0)
-    _desyncStealSliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    _desyncStealSliderKnob.Parent = _desyncStealSliderBg
-    Instance.new("UICorner", _desyncStealSliderKnob).CornerRadius = UDim.new(1, 0)
+    DS.SliderKnob = Instance.new("Frame")
+    DS.SliderKnob.Size = UDim2.new(0, 14, 0, 14)
+    DS.SliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    DS.SliderKnob.Position = UDim2.new(0, 0, 0.5, 0)
+    DS.SliderKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    DS.SliderKnob.Parent = DS.SliderBg
+    Instance.new("UICorner", DS.SliderKnob).CornerRadius = UDim.new(1, 0)
 
-    _desyncToggleButton.MouseButton1Click:Connect(function()
-        if _desyncIsActive then _desyncDeactivate() else _desyncActivate() end
+    DS.ToggleBtn.MouseButton1Click:Connect(function()
+        if DS.IsActive then _desyncDeactivate() else _desyncActivate() end
     end)
-    _desyncAutoToggleButton.MouseButton1Click:Connect(function()
-        _desyncAutoActivate = not _desyncAutoActivate
-        setSetting("AutoDesyncAutoActivate", _desyncAutoActivate)
+    DS.AutoToggleBtn.MouseButton1Click:Connect(function()
+        DS.AutoActivate = not DS.AutoActivate
+        setSetting("AutoDesyncAutoActivate", DS.AutoActivate)
         _desyncUpdateStatusUI()
-        if _desyncAutoActivate and not _desyncIsActive then
+        if DS.AutoActivate and not DS.IsActive then
             _desyncActivate()
         end
     end)
     do
         local sliderDragging = false
         local function updateSlider(input)
-            if not _desyncStealSliderBg then return end
-            local pos = math.clamp(input.Position.X - _desyncStealSliderBg.AbsolutePosition.X, 0, _desyncStealSliderBg.AbsoluteSize.X)
-            local percent = pos / _desyncStealSliderBg.AbsoluteSize.X
-            _desyncStealSpeed = math.floor(_desyncStealMin + (percent * (_desyncStealMax - _desyncStealMin)))
-            setRawSetting("StealSpeedValue", _desyncStealSpeed)
+            if not DS.SliderBg then return end
+            local pos = math.clamp(input.Position.X - DS.SliderBg.AbsolutePosition.X, 0, DS.SliderBg.AbsoluteSize.X)
+            local percent = pos / DS.SliderBg.AbsoluteSize.X
+            DS.StealSpeed = math.floor(DS.StealMin + (percent * (DS.StealMax - DS.StealMin)))
+            setRawSetting("StealSpeedValue", DS.StealSpeed)
             _desyncUpdateStealUI()
         end
-        _desyncStealSliderBg.InputBegan:Connect(function(input)
+        DS.SliderBg.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 sliderDragging = true
                 updateSlider(input)
@@ -2991,28 +2987,28 @@ function _buildDesyncPanel()
             end
         end)
     end
-    _desyncSetButtonUI()
+    DS.SetButtonUI()
     _desyncUpdateStatusUI()
     _desyncUpdateStealUI()
 end
 
 function _loadDesync()
-    if _desyncLoaded then
-        if _desyncGui then _desyncGui.Enabled = true end
+    if DS.Loaded then
+        if DS.Gui then DS.Gui.Enabled = true end
         return
     end
-    _desyncLoaded = true
+    DS.Loaded = true
     _buildDesyncPanel()
     _desyncEnsureStealLoop()
-    if _desyncAutoActivate and not _desyncIsActive then
+    if DS.AutoActivate and not DS.IsActive then
         task.spawn(function()
             task.wait(0.2)
             _desyncActivate()
         end)
     end
-    if not _desyncWorldAddedConn then
-        _desyncWorldAddedConn = Workspace.ChildAdded:Connect(function(child)
-            if _desyncIsActive and child.Name == _desyncCloneName and child:IsA("Model") then
+    if not DS.WorldAddedConn then
+        DS.WorldAddedConn = Workspace.ChildAdded:Connect(function(child)
+            if DS.IsActive and child.Name == DS.CloneName and child:IsA("Model") then
                 _desyncApplyToClone(child, true)
             end
         end)
@@ -3139,8 +3135,8 @@ _G.KYNAddToggle("Main", {
             _loadDesync()
         else
             _desyncDeactivate()
-            if _desyncGui then _desyncGui.Enabled = false end
-            if _desyncPanel then _desyncPanel.Visible = false end
+            if DS.Gui then DS.Gui.Enabled = false end
+            if DS.Panel then DS.Panel.Visible = false end
         end
     end
 })
