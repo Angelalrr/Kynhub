@@ -79,29 +79,16 @@ function ShowNotification(titulo, mensaje, color)
         host.Parent = parentGui
     end
 
-    local container = host:FindFirstChild("Container")
-    if not container then
-        container = Instance.new("Frame")
-        container.Name = "Container"
-        container.AnchorPoint = Vector2.new(0.5, 0)
-        container.Size = UDim2.new(0, 360, 0, 320)
-        container.Position = UDim2.new(0.5, 0, 0, 18)
-        container.BackgroundTransparency = 1
-        container.Parent = host
-
-        local layout = Instance.new("UIListLayout")
-        layout.Padding = UDim.new(0, 8)
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        layout.VerticalAlignment = Enum.VerticalAlignment.Top
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.Parent = container
-    end
+    local current = host:FindFirstChild("NotificationItem")
+    if current then current:Destroy() end
 
     local holder = Instance.new("Frame")
     holder.Name = "NotificationItem"
-    holder.Size = UDim2.new(1, 0, 0, 72)
+    holder.AnchorPoint = Vector2.new(0.5, 0)
+    holder.Size = UDim2.new(0, 360, 0, 72)
+    holder.Position = UDim2.new(0.5, 0, -0.2, 0)
     holder.BackgroundTransparency = 1
-    holder.Parent = container
+    holder.Parent = host
 
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, 0, 1, 0)
@@ -145,23 +132,23 @@ function ShowNotification(titulo, mensaje, color)
     body.Text = tostring(mensaje or "")
     body.Parent = card
 
-    card.AnchorPoint = Vector2.new(0, 0)
-    card.Position = UDim2.new(0, 0, 0, -90)
     card.BackgroundTransparency = 1
     side.BackgroundTransparency = 1
 
+    tweenService:Create(holder, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0.16, 0)
+    }):Play()
     tweenService:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0, 0, 0, 0),
         BackgroundTransparency = 0.08
     }):Play()
     tweenService:Create(side, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
 
-    task.delay(4, function()
+    task.delay(3.6, function()
         if not card or not card.Parent then return end
-        local out = tweenService:Create(card, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Position = UDim2.new(0, 0, 0, -90),
-            BackgroundTransparency = 1
+        local out = tweenService:Create(holder, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, 0, -0.2, 0)
         })
+        tweenService:Create(card, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1}):Play()
         tweenService:Create(side, TweenInfo.new(0.22), {BackgroundTransparency = 1}):Play()
         out:Play()
         out.Completed:Wait()
@@ -258,6 +245,8 @@ local SETTINGS = {
     ShowFloatButton = true,
     ShowRespawnButton = true,
     StealSpeedValue = 25,
+    DesyncMinimized = false,
+    DesyncLastActive = false,
     GuiPositions = {},
     Keybinds = {},
 }
@@ -2547,6 +2536,8 @@ local DS = {
     ServerGhost = nil, WorldAddedConn = nil,
     IsActive = false,
     AutoActivate = SETTINGS.AutoDesyncAutoActivate and true or false,
+    Minimized = SETTINGS.DesyncMinimized and true or false,
+    RestoreLastActive = SETTINGS.DesyncLastActive and true or false,
     StealEnabled = true,
     StealSpeed = math.clamp(tonumber(SETTINGS.StealSpeedValue) or 25, 5, 100),
     StealMin = 5, StealMax = 100,
@@ -2790,6 +2781,8 @@ function _desyncActivate()
     local char = LocalPlayer.Character
     if not char then return end
     DS.IsActive = true
+    DS.RestoreLastActive = true
+    setSetting("DesyncLastActive", true)
     DS.SetButtonUI()
     _desyncUpdateStatusUI()
     _desyncCreateServerGhost(char)
@@ -2811,6 +2804,8 @@ end
 
 function _desyncDeactivate()
     DS.IsActive = false
+    DS.RestoreLastActive = false
+    setSetting("DesyncLastActive", false)
     DS.SetButtonUI()
     _desyncUpdateStatusUI()
     pcall(function() raknet.desync(false) end)
@@ -2828,7 +2823,7 @@ function _buildDesyncPanel()
 
     DS.Panel = Instance.new("Frame")
     DS.Panel.Name = "KYN_DesyncPanel"
-    DS.Panel.Size = UDim2.new(0, 250, 0, 250)
+    DS.Panel.Size = DS.Minimized and UDim2.new(0, 250, 0, 35) or UDim2.new(0, 250, 0, 250)
     DS.Panel.Position = _loadGuiPos("DesyncPanel", UDim2.new(1, -265, 0.55, -125))
     DS.Panel.BackgroundColor3 = THEME.FrameBg
     DS.Panel.BorderSizePixel = 0
@@ -2859,17 +2854,17 @@ function _buildDesyncPanel()
     _desyncMinimizeBtn.Font = Enum.Font.GothamBold
     _desyncMinimizeBtn.TextSize = 14
     _desyncMinimizeBtn.AutoButtonColor = false
-    _desyncMinimizeBtn.Text = "-"
+    _desyncMinimizeBtn.Text = DS.Minimized and "+" or "-"
     Instance.new("UICorner", _desyncMinimizeBtn).CornerRadius = UDim.new(0, 5)
     
-    local isDesyncMinimized = false
     _desyncMinimizeBtn.MouseButton1Click:Connect(function()
-        isDesyncMinimized = not isDesyncMinimized
-        DS.Panel.Size = isDesyncMinimized and UDim2.new(0, 250, 0, 35) or UDim2.new(0, 250, 0, 250)
-        _desyncMinimizeBtn.Text = isDesyncMinimized and "+" or "-"
+        DS.Minimized = not DS.Minimized
+        setSetting("DesyncMinimized", DS.Minimized)
+        DS.Panel.Size = DS.Minimized and UDim2.new(0, 250, 0, 35) or UDim2.new(0, 250, 0, 250)
+        _desyncMinimizeBtn.Text = DS.Minimized and "+" or "-"
         for _, child in ipairs(DS.Panel:GetChildren()) do
             if child ~= title and child ~= _desyncMinimizeBtn and child:IsA("GuiObject") then
-                child.Visible = not isDesyncMinimized
+                child.Visible = not DS.Minimized
             end
         end
     end)
@@ -2990,6 +2985,11 @@ function _buildDesyncPanel()
     DS.SetButtonUI()
     _desyncUpdateStatusUI()
     _desyncUpdateStealUI()
+    for _, child in ipairs(DS.Panel:GetChildren()) do
+        if child ~= title and child ~= _desyncMinimizeBtn and child:IsA("GuiObject") then
+            child.Visible = not DS.Minimized
+        end
+    end
 end
 
 function _loadDesync()
@@ -3000,7 +3000,7 @@ function _loadDesync()
     DS.Loaded = true
     _buildDesyncPanel()
     _desyncEnsureStealLoop()
-    if DS.AutoActivate and not DS.IsActive then
+    if (DS.AutoActivate or DS.RestoreLastActive) and not DS.IsActive then
         task.spawn(function()
             task.wait(0.2)
             _desyncActivate()
